@@ -16,7 +16,8 @@ import {
 import { ActivityHeatmap } from "../components/ActivityHeatmap";
 import { MiniCalendar } from "../components/MiniCalendar";
 import type { NavKey } from "../components/Sidebar";
-import { activity, recentDocuments, sessions, stats, studyPlans, user } from "../data";
+import { activity, recentDocuments, sessions, stats, studyPlans } from "../data";
+import { displayName, useAuth } from "../lib/auth";
 
 function greeting(d = new Date()) {
   const h = d.getHours();
@@ -67,6 +68,8 @@ function EmptyState({ title, body, action, onAction }: { title: string; body: st
 
 export function Dashboard({ onNavigate }: { onNavigate: (k: NavKey) => void }) {
   const [getStartedOpen, setGetStartedOpen] = useState(true);
+  const { user, profile } = useAuth();
+  const firstName = displayName(profile, user).split(" ")[0];
   const minutes = stats.studyMinutes;
   const studyTime = minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`;
 
@@ -76,7 +79,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (k: NavKey) => void }) {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">
-            {greeting()}, {user.firstName}
+            {greeting()}, {firstName}
           </h1>
           <p className="mt-2 text-neutral-500">Ready to start your learning journey?</p>
         </div>

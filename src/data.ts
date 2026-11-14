@@ -2,16 +2,6 @@
 
 export const BRAND = { name: "Lumen" };
 
-export const user = {
-  firstName: "Neilaksh",
-  fullName: "Neilaksh",
-  initial: "N",
-  email: "you@example.com",
-  signInMethod: "Email",
-  memberSince: "November 2026",
-  plan: "Free",
-};
-
 export const stats = {
   documents: 0,
   quizzes: 0,
@@ -25,15 +15,6 @@ export const activity: Record<string, number> = {
   "2026-11-08": 3,
   "2026-11-14": 2,
 };
-
-export const usage = [
-  { label: "PDFs", used: 0, limit: 3, icon: "file" },
-  { label: "Quizzes", used: 0, limit: 3, icon: "quiz" },
-  { label: "Summaries", used: 0, limit: 3, icon: "summary" },
-  { label: "Explanations", used: 0, limit: 25, icon: "help" },
-  { label: "Resource Searches", used: 0, limit: 5, icon: "search" },
-  { label: "Study Plans", used: 1, limit: 1, icon: "calendar" },
-] as const;
 
 export type StudyPlan = { id: string; title: string; exam: string };
 export const studyPlans: StudyPlan[] = [];

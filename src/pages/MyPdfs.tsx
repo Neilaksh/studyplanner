@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { FileText, FolderPlus, Inbox, LayoutGrid, List, Search, UploadCloud } from "lucide-react";
 import { PageBody, PageHeader } from "../components/ui";
-import { documents as seedDocs, folders as seedFolders, usage, type Doc, type DocStatus, type Folder } from "../data";
+import { documents as seedDocs, folders as seedFolders, type Doc, type DocStatus, type Folder } from "../data";
 
 type Tab = "all" | DocStatus;
 type Sort = "last-studied" | "name" | "created" | "size";
@@ -18,8 +18,6 @@ const STATUS_LABEL: Record<DocStatus, string> = {
   "in-progress": "In Progress",
   completed: "Completed",
 };
-
-const pdfLimit = usage.find((u) => u.label === "PDFs")!.limit;
 
 function Count({ n, active }: { n: number; active?: boolean }) {
   return (
@@ -58,14 +56,10 @@ export function MyPdfs() {
     return [...list].sort(by[sort]);
   }, [inFolder, tab, query, sort]);
 
-  const atLimit = docs.length >= pdfLimit;
-
   function onFiles(files: FileList | null) {
     if (!files) return;
-    const room = pdfLimit - docs.length;
     const added = [...files]
       .filter((f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"))
-      .slice(0, Math.max(0, room))
       .map<Doc>((f) => ({
         id: crypto.randomUUID(),
         name: f.name.replace(/\.pdf$/i, ""),
@@ -139,14 +133,13 @@ export function MyPdfs() {
               <div className="text-right">
                 <input ref={fileInput} type="file" accept="application/pdf" multiple hidden onChange={(e) => onFiles(e.target.files)} />
                 <button
-                  disabled={atLimit}
                   onClick={() => fileInput.current?.click()}
                   className="btn-primary inline-flex h-12 items-center gap-2 rounded-[2px] px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <UploadCloud className="size-5" /> Upload PDF
                 </button>
                 <p className="mt-1.5 text-xs font-medium text-neutral-500">
-                  {docs.length} of {pdfLimit} PDFs uploaded
+                  {docs.length} PDF{docs.length === 1 ? "" : "s"} uploaded
                 </p>
               </div>
             }

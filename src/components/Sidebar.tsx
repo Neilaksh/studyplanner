@@ -1,18 +1,4 @@
-import {
-  ArrowRight,
-  CalendarDays,
-  Clock,
-  Crown,
-  FileText,
-  FileStack,
-  HelpCircle,
-  Home,
-  NotebookText,
-  Search,
-  Settings,
-  type LucideIcon,
-} from "lucide-react";
-import { usage } from "../data";
+import { CalendarDays, Clock, FileText, Home, Settings, type LucideIcon } from "lucide-react";
 
 export type NavKey = "dashboard" | "pdfs" | "quizzes" | "planner" | "settings";
 
@@ -23,15 +9,6 @@ export const NAV: { key: NavKey; label: string; path: string; icon: LucideIcon }
   { key: "planner", label: "Study Planner", path: "/study-planner", icon: CalendarDays },
   { key: "settings", label: "Settings", path: "/settings", icon: Settings },
 ];
-
-const USAGE_ICONS: Record<(typeof usage)[number]["icon"], LucideIcon> = {
-  file: FileText,
-  quiz: FileStack,
-  summary: NotebookText,
-  help: HelpCircle,
-  search: Search,
-  calendar: CalendarDays,
-};
 
 type Props = { collapsed: boolean; active: NavKey; onSelect: (k: NavKey) => void };
 
@@ -64,43 +41,6 @@ export function Sidebar({ collapsed, active, onSelect }: Props) {
           );
         })}
       </nav>
-
-      {!collapsed && (
-        <div className="border-t border-neutral-200 p-4 dark:border-[#2e2e33]">
-          <section
-            aria-label="Upgrade to Pro promotion"
-            className="rounded-sm border border-neutral-200 bg-neutral-50 p-4 dark:border-[#2e2e33] dark:bg-[#202024]"
-          >
-            <div className="flex items-center gap-3">
-              <span className="btn-primary grid size-10 place-items-center rounded-sm">
-                <Crown className="size-5" />
-              </span>
-              <div>
-                <h2 className="text-sm font-semibold">Upgrade to Pro</h2>
-                <p className="text-xs text-neutral-500">Unlimited everything</p>
-              </div>
-            </div>
-            <ul className="mt-4 space-y-2 text-[13px]">
-              {usage.map((u) => {
-                const Icon = USAGE_ICONS[u.icon];
-                return (
-                  <li key={u.label} className="flex items-center gap-2 text-neutral-600 dark:text-neutral-400">
-                    <Icon className="size-4" />
-                    <span className="flex-1">{u.label}</span>
-                    <span className="font-medium text-neutral-900 tabular-nums dark:text-neutral-100">
-                      {u.used}/{u.limit}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-            <button className="mt-4 w-full text-center text-xs font-medium hover:underline dark:text-accent-500">View Details →</button>
-            <button className="btn-primary mt-2 flex w-full items-center justify-center gap-2 rounded-sm py-2 text-sm font-medium">
-              Upgrade Now <ArrowRight className="size-4" />
-            </button>
-          </section>
-        </div>
-      )}
     </aside>
   );
 }

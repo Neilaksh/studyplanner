@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CalendarDays,
   Check,
   ChevronDown,
-  Crown,
   Info,
+  Loader2,
   Lock,
   Mail,
   Settings as SettingsIcon,
@@ -12,15 +12,19 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { PageBody, PageHeader } from "../components/ui";
-import { outputLanguages, user } from "../data";
+import { outputLanguages } from "../data";
+import { displayName, useAuth } from "../lib/auth";
+import { supabase } from "../lib/supabase";
 
-type Section = "profile" | "security" | "subscription" | "preferences";
+type Section = "profile" | "security" | "preferences";
 const SECTIONS: { key: Section; label: string; icon: LucideIcon }[] = [
   { key: "profile", label: "Profile", icon: User },
   { key: "security", label: "Security", icon: Lock },
-  { key: "subscription", label: "Subscription", icon: Crown },
   { key: "preferences", label: "Preferences", icon: SettingsIcon },
 ];
+const PDF_LANGUAGE = outputLanguages[0];
+
+type Message = { ok: boolean; text: string } | null;
 
 function Card({ id, children }: { id: Section; children: React.ReactNode }) {
   return (
@@ -49,28 +53,92 @@ function Label({ children }: { children: React.ReactNode }) {
   return <span className="mb-2 block font-semibold">{children}</span>;
 }
 
+function Status({ message }: { message: Message }) {
+  if (!message) return null;
+  return (
+    <p role="status" className={`text-sm ${message.ok ? "text-green-600" : "text-red-500"}`}>
+      {message.text}
+    </p>
+  );
+}
+
 export function Settings() {
+  const { user, profile, refreshProfile } = useAuth();
   const [active, setActive] = useState<Section>("profile");
-  const [name, setName] = useState(user.fullName);
-  const [savedName, setSavedName] = useState(user.fullName);
+
+  const savedName = profile?.full_name ?? "";
+  const [name, setName] = useState(savedName);
+  const [nameBusy, setNameBusy] = useState(false);
+  const [nameMessage, setNameMessage] = useState<Message>(null);
+
   const [pw, setPw] = useState({ current: "", next: "", confirm: "" });
-  const [pwMessage, setPwMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  const [language, setLanguage] = useState(outputLanguages[0]);
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwMessage, setPwMessage] = useState<Message>(null);
+
+  const [language, setLanguage] = useState(profile?.output_language ?? PDF_LANGUAGE);
+  const [langMessage, setLangMessage] = useState<Message>(null);
   const [howOpen, setHowOpen] = useState(false);
+
+  // Profile loads after the page can mount; sync the form once it arrives.
+  useEffect(() => {
+    setName(profile?.full_name ?? "");
+    setLanguage(profile?.output_language ?? PDF_LANGUAGE);
+  }, [profile]);
+
+  const shownName = displayName(profile, user);
+  const memberSince = user?.created_at
+    ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    : "";
 
   function jump(s: Section) {
     setActive(s);
     document.getElementById(`settings-${s}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  function updatePassword(e: React.FormEvent) {
+  async function saveName(e: React.FormEvent) {
     e.preventDefault();
+    if (!user) return;
+    setNameBusy(true);
+    setNameMessage(null);
+    const { error } = await supabase.from("profiles").update({ full_name: name.trim() || null }).eq("id", user.id);
+    setNameBusy(false);
+    if (error) return setNameMessage({ ok: false, text: error.message });
+    await refreshProfile();
+    setNameMessage({ ok: true, text: "Saved." });
+  }
+
+  async function updatePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!user?.email) return;
     if (!pw.current) return setPwMessage({ ok: false, text: "Enter your current password." });
     if (pw.next.length < 8) return setPwMessage({ ok: false, text: "New password must be at least 8 characters long." });
     if (pw.next !== pw.confirm) return setPwMessage({ ok: false, text: "New passwords do not match." });
-    // Mock only: wire this to your auth backend.
+    setPwBusy(true);
+    setPwMessage(null);
+    // Supabase does not require the old password to change it, so confirm it first.
+    const check = await supabase.auth.signInWithPassword({ email: user.email, password: pw.current });
+    if (check.error) {
+      setPwBusy(false);
+      return setPwMessage({ ok: false, text: "Current password is incorrect." });
+    }
+    const { error } = await supabase.auth.updateUser({ password: pw.next });
+    setPwBusy(false);
+    if (error) return setPwMessage({ ok: false, text: error.message });
     setPw({ current: "", next: "", confirm: "" });
     setPwMessage({ ok: true, text: "Password updated." });
+  }
+
+  async function saveLanguage(next: string) {
+    if (!user) return;
+    setLanguage(next);
+    setLangMessage(null);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ output_language: next === PDF_LANGUAGE ? null : next })
+      .eq("id", user.id);
+    if (error) return setLangMessage({ ok: false, text: error.message });
+    await refreshProfile();
+    setLangMessage({ ok: true, text: "Saved." });
   }
 
   return (
@@ -99,36 +167,31 @@ export function Settings() {
         </nav>
 
         <div className="min-w-0 space-y-6">
-          {/* Profile */}
           <Card id="profile">
             <header className="flex flex-wrap items-center gap-5 border-b border-neutral-200 p-6 dark:border-[#2e2e33]">
-              <span className="btn-primary grid size-24 place-items-center rounded-sm text-4xl font-bold" aria-label={`${savedName}'s avatar`}>
-                {savedName.trim().charAt(0).toUpperCase() || user.initial}
+              <span className="btn-primary grid size-24 place-items-center rounded-sm text-4xl font-bold" aria-label={`${shownName}'s avatar`}>
+                {shownName.charAt(0).toUpperCase()}
               </span>
-              <div>
-                <h2 className="text-2xl font-bold">{savedName}</h2>
-                <p className="mt-1 text-neutral-500">{user.email}</p>
+              <div className="min-w-0">
+                <h2 className="truncate text-2xl font-bold">{shownName}</h2>
+                <p className="mt-1 truncate text-neutral-500">{user?.email}</p>
                 <div className="mt-3 flex flex-wrap gap-2 text-sm">
-                  <span role="status" aria-label={`Signed in with ${user.signInMethod.toLowerCase()}`} className="flex items-center gap-1.5 rounded-[2px] bg-neutral-100 px-2.5 py-1 dark:bg-[#2a2a2e]">
-                    <Mail className="size-3.5" /> {user.signInMethod}
+                  <span role="status" aria-label="Signed in with email" className="flex items-center gap-1.5 rounded-[2px] bg-neutral-100 px-2.5 py-1 dark:bg-[#2a2a2e]">
+                    <Mail className="size-3.5" /> Email
                   </span>
-                  <span role="status" aria-label={`Member since ${user.memberSince}`} className="flex items-center gap-1.5 rounded-[2px] bg-neutral-100 px-2.5 py-1 dark:bg-[#2a2a2e]">
-                    <CalendarDays className="size-3.5" /> {user.memberSince}
-                  </span>
+                  {memberSince && (
+                    <span role="status" aria-label={`Member since ${memberSince}`} className="flex items-center gap-1.5 rounded-[2px] bg-neutral-100 px-2.5 py-1 dark:bg-[#2a2a2e]">
+                      <CalendarDays className="size-3.5" /> {memberSince}
+                    </span>
+                  )}
                 </div>
               </div>
             </header>
-            <form
-              className="space-y-6 p-6"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (name.trim()) setSavedName(name.trim());
-              }}
-            >
+            <form className="space-y-6 p-6" onSubmit={saveName}>
               <label className="block">
                 <Label>Email Address</Label>
                 <span className="relative block">
-                  <input type="email" value={user.email} disabled className="field pr-11 text-neutral-500 disabled:bg-neutral-100 dark:disabled:bg-[#26262a]" />
+                  <input type="email" value={user?.email ?? ""} disabled className="field pr-11 text-neutral-500 disabled:bg-neutral-100 dark:disabled:bg-[#26262a]" />
                   <Lock className="absolute top-1/2 right-4 size-4 -translate-y-1/2 text-neutral-400" />
                 </span>
                 <span className="mt-2 flex items-center gap-1.5 text-sm text-neutral-500">
@@ -137,21 +200,21 @@ export function Settings() {
               </label>
               <label className="block">
                 <Label>Full Name</Label>
-                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter your full name" className="field" />
+                <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} placeholder="Enter your full name" className="field" />
               </label>
-              <div className="flex justify-end">
+              <div className="flex items-center justify-end gap-4">
+                <Status message={nameMessage} />
                 <button
-                  disabled={!name.trim() || name.trim() === savedName}
+                  disabled={nameBusy || name.trim() === savedName}
                   aria-label="Save profile changes"
                   className="btn-primary flex items-center gap-2 rounded-[2px] px-5 py-2.5 font-medium disabled:opacity-50"
                 >
-                  <Check className="size-4" /> Save Changes
+                  {nameBusy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />} Save Changes
                 </button>
               </div>
             </form>
           </Card>
 
-          {/* Security */}
           <Card id="security">
             <CardHeader icon={Lock} title="Security" subtitle="Change your password" tint="bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400" />
             <form className="space-y-6 p-6" onSubmit={updatePassword}>
@@ -169,41 +232,22 @@ export function Settings() {
                 <input type="password" autoComplete="new-password" value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} placeholder="Confirm your new password" className="field" />
               </label>
               <div className="flex items-center justify-end gap-4">
-                {pwMessage && (
-                  <p role="status" className={`text-sm ${pwMessage.ok ? "text-green-600" : "text-red-500"}`}>
-                    {pwMessage.text}
-                  </p>
-                )}
-                <button className="btn-primary rounded-[2px] px-5 py-2.5 font-medium">Update Password</button>
+                <Status message={pwMessage} />
+                <button disabled={pwBusy} className="btn-primary flex items-center gap-2 rounded-[2px] px-5 py-2.5 font-medium disabled:opacity-50">
+                  {pwBusy && <Loader2 className="size-4 animate-spin" />} Update Password
+                </button>
               </div>
             </form>
           </Card>
 
-          {/* Subscription */}
-          <Card id="subscription">
-            <CardHeader icon={Crown} title="Subscription" subtitle="Upgrade to Pro for unlimited access" tint="bg-accent-50 text-accent-500 dark:bg-accent-500/15" />
-            <div className="space-y-4 p-6">
-              <div className="flex items-center justify-between rounded-sm border border-neutral-200 p-4 dark:border-[#2e2e33]">
-                <div>
-                  <p className="font-semibold">{user.plan} Plan</p>
-                  <p className="text-sm text-neutral-500">Limited access to features</p>
-                </div>
-                <span className="rounded-[2px] bg-neutral-100 px-2.5 py-1 text-sm font-medium dark:bg-[#2a2a2e]">Current</span>
-              </div>
-              <a href="#" className="btn-primary flex items-center justify-center gap-2 rounded-[2px] py-3 font-semibold">
-                <Crown className="size-4" /> Upgrade to Pro
-              </a>
-              <p className="text-center text-sm text-neutral-500">Unlock unlimited quizzes, summaries, study plans, and more</p>
-            </div>
-          </Card>
-
-          {/* Preferences */}
           <Card id="preferences">
             <CardHeader icon={SettingsIcon} title="Preferences" subtitle="Customize your learning experience" tint="bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400" />
             <div className="space-y-4 p-6">
               <label className="block">
-                <Label>Output Language</Label>
-                <select value={language} onChange={(e) => setLanguage(e.target.value)} className="field">
+                <span className="mb-2 flex items-center justify-between font-semibold">
+                  Output Language <Status message={langMessage} />
+                </span>
+                <select value={language} onChange={(e) => void saveLanguage(e.target.value)} className="field">
                   {outputLanguages.map((l) => (
                     <option key={l}>{l}</option>
                   ))}

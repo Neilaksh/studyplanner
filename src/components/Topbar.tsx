@@ -12,8 +12,59 @@ import {
   Sun,
 } from "lucide-react";
 import { Logo } from "./Logo";
-import { user } from "../data";
+import { useEffect, useRef, useState } from "react";
+import { LogOut, Settings as SettingsIcon } from "lucide-react";
+import { displayName, useAuth } from "../lib/auth";
 import { navigate } from "../router";
+
+function AccountMenu() {
+  const { user, profile, signOut } = useAuth();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const name = displayName(profile, user);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+
+  const item = "flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800";
+  return (
+    <div ref={ref} className="relative ml-1">
+      <button
+        className="btn-primary grid size-10 place-items-center rounded-md font-semibold"
+        aria-label="Account menu"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        {name.charAt(0).toUpperCase() || "?"}
+      </button>
+      {open && (
+        <div role="menu" className="surface absolute right-0 z-30 mt-2 w-60 rounded-sm border border-neutral-200 py-1 shadow-lg dark:border-[#2e2e33]">
+          <div className="border-b border-neutral-200 px-4 py-3 dark:border-[#2e2e33]">
+            <p className="truncate font-semibold">{name}</p>
+            <p className="truncate text-sm text-neutral-500">{user?.email}</p>
+          </div>
+          <button role="menuitem" className={item} onClick={() => { setOpen(false); navigate("/settings"); }}>
+            <SettingsIcon className="size-4" /> Settings
+          </button>
+          <button role="menuitem" className={`${item} text-red-600`} onClick={() => void signOut()}>
+            <LogOut className="size-4" /> Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 type Props = {
   collapsed: boolean;
@@ -84,13 +135,7 @@ export function Topbar({ collapsed, onToggleSidebar, dark, onToggleTheme }: Prop
         <button className={iconBtn} onClick={onToggleTheme} aria-label="Toggle theme">
           {dark ? <Moon className="size-5" /> : <Sun className="size-5" />}
         </button>
-        <button
-          className="btn-primary ml-1 grid size-10 place-items-center rounded-md font-semibold"
-          aria-label="Account settings"
-          onClick={() => navigate("/settings")}
-        >
-          {user.initial}
-        </button>
+        <AccountMenu />
       </div>
     </header>
   );

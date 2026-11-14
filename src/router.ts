@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 
 // Minimal history-API router: the app only needs a handful of flat paths.
-export function navigate(path: string) {
+export function navigate(path: string, { replace = false }: { replace?: boolean } = {}) {
   if (path === window.location.pathname) return;
-  window.history.pushState(null, "", path);
+  if (replace) window.history.replaceState(null, "", path);
+  else window.history.pushState(null, "", path);
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
