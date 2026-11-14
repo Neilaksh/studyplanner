@@ -1,23 +1,56 @@
 import { useMemo, useRef, useState } from "react";
-import { FileText, FolderPlus, Inbox, LayoutGrid, List, Search, UploadCloud } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ExternalLink,
+  FileText,
+  FolderPlus,
+  Inbox,
+  LayoutGrid,
+  List,
+  Loader2,
+  Search,
+  Trash2,
+  UploadCloud,
+  X,
+} from "lucide-react";
 import { PageBody, PageHeader } from "../components/ui";
-import { documents as seedDocs, folders as seedFolders, type Doc, type DocStatus, type Folder } from "../data";
+import {
+  uploadPdf,
+  useDocuments,
+  useFolders,
+  useLibraryMutations,
+  type DocStatus,
+  type DocumentRow,
+  type UploadProgress,
+} from "../lib/library";
 
 type Tab = "all" | DocStatus;
 type Sort = "last-studied" | "name" | "created" | "size";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "all", label: "All" },
-  { key: "not-started", label: "Not Started" },
-  { key: "in-progress", label: "In Progress" },
+  { key: "not_started", label: "Not Started" },
+  { key: "in_progress", label: "In Progress" },
   { key: "completed", label: "Completed" },
 ];
-
 const STATUS_LABEL: Record<DocStatus, string> = {
-  "not-started": "Not Started",
-  "in-progress": "In Progress",
+  not_started: "Not Started",
+  in_progress: "In Progress",
   completed: "Completed",
 };
+const STAGE_LABEL: Record<UploadProgress["stage"], string> = {
+  reading: "Reading text",
+  uploading: "Uploading",
+  saving: "Saving",
+  done: "Uploaded",
+  failed: "Failed",
+};
+
+type UploadItem = { key: string; name: string; progress: UploadProgress; error?: string; note?: string };
+
+const formatSize = (bytes: number) =>
+  bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
 function Count({ n, active }: { n: number; active?: boolean }) {
   return (
@@ -31,57 +64,125 @@ function Count({ n, active }: { n: number; active?: boolean }) {
   );
 }
 
+function DocActions({ doc }: { doc: DocumentRow }) {
+  const { openDocument, updateDocument, deleteDocument } = useLibraryMutations();
+  const { data: folders = [] } = useFolders();
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        onClick={() => openDocument.mutate(doc)}
+        className="btn-primary flex items-center gap-1.5 rounded-[2px] px-3 py-1.5 text-sm font-medium"
+      >
+        <ExternalLink className="size-3.5" /> Open
+      </button>
+      <select
+        aria-label={`Status of ${doc.title}`}
+        value={doc.status}
+        onChange={(e) => updateDocument.mutate({ id: doc.id, status: e.target.value as DocStatus })}
+        className="surface rounded-[2px] border border-neutral-200 px-2 py-1.5 text-sm dark:border-[#2e2e33]"
+      >
+        {Object.entries(STATUS_LABEL).map(([v, l]) => (
+          <option key={v} value={v}>
+            {l}
+          </option>
+        ))}
+      </select>
+      {folders.length > 0 && (
+        <select
+          aria-label={`Folder of ${doc.title}`}
+          value={doc.folder_id ?? ""}
+          onChange={(e) => updateDocument.mutate({ id: doc.id, folder_id: e.target.value || null })}
+          className="surface max-w-36 rounded-[2px] border border-neutral-200 px-2 py-1.5 text-sm dark:border-[#2e2e33]"
+        >
+          <option value="">No folder</option>
+          {folders.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+            </option>
+          ))}
+        </select>
+      )}
+      <button
+        onClick={() => {
+          if (window.confirm(`Delete "${doc.title}"? Its quizzes, summaries and notes are deleted too. This cannot be undone.`))
+            deleteDocument.mutate(doc);
+        }}
+        disabled={deleteDocument.isPending}
+        aria-label={`Delete ${doc.title}`}
+        className="grid size-8 place-items-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-red-500 dark:hover:bg-neutral-800"
+      >
+        <Trash2 className="size-4" />
+      </button>
+    </div>
+  );
+}
+
 export function MyPdfs() {
-  const [docs, setDocs] = useState<Doc[]>(seedDocs);
-  const [folders, setFolders] = useState<Folder[]>(seedFolders);
+  const docsQuery = useDocuments();
+  const foldersQuery = useFolders();
+  const { createFolder, deleteFolder, refreshAll, openDocument, updateDocument, deleteDocument } = useLibraryMutations();
+  const docs = useMemo(() => docsQuery.data ?? [], [docsQuery.data]);
+  const folders = foldersQuery.data ?? [];
+
   const [folder, setFolder] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<Sort>("last-studied");
   const [view, setView] = useState<"grid" | "list">("grid");
+  const [uploads, setUploads] = useState<UploadItem[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const inFolder = useMemo(() => docs.filter((d) => folder === null || d.folderId === folder), [docs, folder]);
+  const mutationError = [openDocument, updateDocument, deleteDocument, createFolder, deleteFolder].find((m) => m.error)?.error;
+
+  const inFolder = useMemo(() => docs.filter((d) => folder === null || d.folder_id === folder), [docs, folder]);
   const countFor = (t: Tab) => (t === "all" ? inFolder.length : inFolder.filter((d) => d.status === t).length);
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = inFolder.filter((d) => (tab === "all" || d.status === tab) && (!q || d.name.toLowerCase().includes(q)));
-    const by: Record<Sort, (a: Doc, b: Doc) => number> = {
-      "last-studied": (a, b) => (b.lastStudied ?? "").localeCompare(a.lastStudied ?? ""),
-      name: (a, b) => a.name.localeCompare(b.name),
-      created: (a, b) => b.uploaded.localeCompare(a.uploaded),
-      size: (a, b) => b.sizeKb - a.sizeKb,
+    const list = inFolder.filter((d) => (tab === "all" || d.status === tab) && (!q || d.title.toLowerCase().includes(q)));
+    const by: Record<Sort, (a: DocumentRow, b: DocumentRow) => number> = {
+      "last-studied": (a, b) =>
+        (b.last_studied_at ?? "").localeCompare(a.last_studied_at ?? "") || b.created_at.localeCompare(a.created_at),
+      name: (a, b) => a.title.localeCompare(b.title),
+      created: (a, b) => b.created_at.localeCompare(a.created_at),
+      size: (a, b) => b.size_bytes - a.size_bytes,
     };
     return [...list].sort(by[sort]);
   }, [inFolder, tab, query, sort]);
 
-  function onFiles(files: FileList | null) {
-    if (!files) return;
-    const added = [...files]
-      .filter((f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"))
-      .map<Doc>((f) => ({
-        id: crypto.randomUUID(),
-        name: f.name.replace(/\.pdf$/i, ""),
-        pages: 0,
-        sizeKb: Math.round(f.size / 1024),
-        uploaded: new Date().toISOString(),
-        lastStudied: null,
-        status: "not-started",
-        folderId: folder,
-      }));
-    setDocs((d) => [...added, ...d]);
+  const patchUpload = (key: string, patch: Partial<UploadItem>) =>
+    setUploads((u) => u.map((x) => (x.key === key ? { ...x, ...patch } : x)));
+
+  async function onFiles(files: FileList | null) {
+    if (!files?.length) return;
+    const items = [...files].map((f) => ({ file: f, key: crypto.randomUUID() }));
+    setUploads((u) => [...items.map(({ file, key }) => ({ key, name: file.name, progress: { stage: "reading" as const } })), ...u]);
+    // One at a time keeps memory bounded for large PDFs.
+    for (const { file, key } of items) {
+      try {
+        const res = await uploadPdf(file, folder, (progress) => patchUpload(key, { progress }));
+        patchUpload(key, {
+          progress: { stage: "done" },
+          note: res.emptyText ? "No text found — this may be a scanned PDF, so AI features won't work on it." : undefined,
+        });
+      } catch (err) {
+        patchUpload(key, { progress: { stage: "failed" }, error: err instanceof Error ? err.message : String(err) });
+      }
+      await refreshAll();
+    }
+    if (fileInput.current) fileInput.current.value = "";
   }
 
   function newFolder() {
-    const name = window.prompt("Folder name");
-    if (name?.trim()) setFolders((f) => [...f, { id: crypto.randomUUID(), name: name.trim() }]);
+    const name = window.prompt("Folder name")?.trim();
+    if (name) createFolder.mutate(name.slice(0, 100));
   }
+
+  const busyUploading = uploads.some((u) => !["done", "failed"].includes(u.progress.stage));
 
   return (
     <PageBody>
       <div className="grid gap-6 lg:grid-cols-[256px_minmax(0,1fr)]">
-        {/* Library panel */}
         <aside className="surface h-fit rounded-sm border border-neutral-200 p-4 dark:border-[#2e2e33]">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold tracking-wide text-neutral-500 uppercase">My Library</h3>
@@ -108,14 +209,27 @@ export function MyPdfs() {
             ) : (
               <ul className="mt-2 space-y-0.5">
                 {folders.map((f) => (
-                  <li key={f.id}>
+                  <li key={f.id} className="group flex items-center">
                     <button
                       onClick={() => setFolder(f.id)}
-                      className={`w-full rounded-[2px] px-3 py-2 text-left text-sm ${
+                      className={`flex flex-1 items-center gap-2 truncate rounded-[2px] px-3 py-2 text-left text-sm ${
                         folder === f.id ? "bg-accent-50 text-accent-500 dark:bg-accent-500/15" : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
                       }`}
                     >
-                      {f.name}
+                      <span className="flex-1 truncate">{f.name}</span>
+                      <Count n={docs.filter((d) => d.folder_id === f.id).length} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Delete folder "${f.name}"? Its PDFs stay in your library.`)) {
+                          if (folder === f.id) setFolder(null);
+                          deleteFolder.mutate(f.id);
+                        }
+                      }}
+                      aria-label={`Delete folder ${f.name}`}
+                      className="grid size-7 place-items-center rounded text-neutral-400 opacity-0 group-hover:opacity-100 hover:text-red-500 focus:opacity-100"
+                    >
+                      <X className="size-3.5" />
                     </button>
                   </li>
                 ))}
@@ -124,19 +238,19 @@ export function MyPdfs() {
           </div>
         </aside>
 
-        {/* Documents */}
         <section className="min-w-0">
           <PageHeader
             title="My PDFs"
             subtitle="Upload and manage your study materials"
             actions={
               <div className="text-right">
-                <input ref={fileInput} type="file" accept="application/pdf" multiple hidden onChange={(e) => onFiles(e.target.files)} />
+                <input ref={fileInput} type="file" accept="application/pdf" multiple hidden onChange={(e) => void onFiles(e.target.files)} />
                 <button
+                  disabled={busyUploading}
                   onClick={() => fileInput.current?.click()}
-                  className="btn-primary inline-flex h-12 items-center gap-2 rounded-[2px] px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                  className="btn-primary inline-flex h-12 items-center gap-2 rounded-[2px] px-4 text-sm font-medium disabled:opacity-60"
                 >
-                  <UploadCloud className="size-5" /> Upload PDF
+                  {busyUploading ? <Loader2 className="size-5 animate-spin" /> : <UploadCloud className="size-5" />} Upload PDF
                 </button>
                 <p className="mt-1.5 text-xs font-medium text-neutral-500">
                   {docs.length} PDF{docs.length === 1 ? "" : "s"} uploaded
@@ -144,6 +258,43 @@ export function MyPdfs() {
               </div>
             }
           />
+
+          {uploads.length > 0 && (
+            <ul className="surface mt-6 divide-y divide-neutral-200 rounded-sm border border-neutral-200 dark:divide-[#2e2e33] dark:border-[#2e2e33]">
+              {uploads.map((u) => (
+                <li key={u.key} className="flex items-start gap-3 px-4 py-3 text-sm">
+                  {u.progress.stage === "done" ? (
+                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-green-600" />
+                  ) : u.progress.stage === "failed" ? (
+                    <AlertCircle className="mt-0.5 size-4 shrink-0 text-red-500" />
+                  ) : (
+                    <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-neutral-400" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{u.name}</p>
+                    {(u.error || u.note) && <p className={u.error ? "text-red-500" : "text-amber-600"}>{u.error ?? u.note}</p>}
+                  </div>
+                  <span className="shrink-0 text-neutral-500">
+                    {STAGE_LABEL[u.progress.stage]}
+                    {u.progress.detail ? ` · ${u.progress.detail}` : ""}
+                  </span>
+                </li>
+              ))}
+              {!busyUploading && (
+                <li className="px-4 py-2 text-right">
+                  <button onClick={() => setUploads([])} className="text-xs font-medium text-neutral-500 hover:underline">
+                    Clear
+                  </button>
+                </li>
+              )}
+            </ul>
+          )}
+
+          {mutationError && (
+            <p role="alert" className="mt-4 text-sm text-red-500">
+              {mutationError.message}
+            </p>
+          )}
 
           <div className="mt-8 flex flex-wrap gap-3">
             <div className="surface flex flex-1 flex-wrap gap-1 rounded-[2px] border border-neutral-200 p-1 dark:border-[#2e2e33]">
@@ -161,12 +312,7 @@ export function MyPdfs() {
             </div>
             <label className="surface flex w-full items-center gap-2 rounded-[2px] border border-neutral-200 px-3 sm:w-56 dark:border-[#2e2e33]">
               <Search className="size-4 text-neutral-400" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search library..."
-                className="w-full bg-transparent py-2 text-sm outline-none"
-              />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search library..." className="w-full bg-transparent py-2 text-sm outline-none" />
             </label>
             <select
               value={sort}
@@ -197,38 +343,67 @@ export function MyPdfs() {
             </div>
           </div>
 
-          {shown.length === 0 ? (
+          {docsQuery.isPending ? (
+            <div className="mt-4 grid h-56 place-items-center text-neutral-400">
+              <Loader2 className="size-6 animate-spin" aria-label="Loading library" />
+            </div>
+          ) : docsQuery.isError ? (
+            <div role="alert" className="mt-4 grid h-56 place-items-center rounded-sm border border-dashed border-red-300 text-center text-red-500">
+              <div>
+                <p>Could not load your library: {docsQuery.error.message}</p>
+                <button onClick={() => void docsQuery.refetch()} className="mt-3 text-sm font-medium underline">
+                  Try again
+                </button>
+              </div>
+            </div>
+          ) : shown.length === 0 ? (
             <div
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
-                onFiles(e.dataTransfer.files);
+                void onFiles(e.dataTransfer.files);
               }}
-              className="mt-4 grid h-56 place-items-center rounded-sm border border-dashed border-neutral-300 text-lg text-neutral-500 dark:border-[#3a3a40]"
+              className="mt-4 grid h-56 place-items-center rounded-sm border border-dashed border-neutral-300 text-center text-lg text-neutral-500 dark:border-[#3a3a40]"
             >
-              {docs.length === 0 ? "Your library is empty" : "No PDFs match these filters"}
+              {docs.length === 0 ? (
+                <div>
+                  Your library is empty
+                  <p className="mt-1 text-sm">Drop PDFs here or use Upload PDF</p>
+                </div>
+              ) : (
+                "No PDFs match these filters"
+              )}
             </div>
           ) : view === "grid" ? (
             <ul className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {shown.map((d) => (
-                <li key={d.id} className="dot-card p-5">
+                <li key={d.id} className="dot-card flex flex-col p-5">
                   <span className="dots" />
                   <FileText className="size-8 text-accent-500" />
-                  <p className="mt-3 truncate font-semibold">{d.name}</p>
-                  <p className="mt-1 text-sm text-neutral-500">
-                    {STATUS_LABEL[d.status]} · {d.sizeKb} KB
+                  <p className="mt-3 truncate font-semibold" title={d.title}>
+                    {d.title}
                   </p>
+                  <p className="mt-1 text-sm text-neutral-500">
+                    {d.page_count ?? "?"} pages · {formatSize(d.size_bytes)}
+                  </p>
+                  <div className="mt-4">
+                    <DocActions doc={d} />
+                  </div>
                 </li>
               ))}
             </ul>
           ) : (
             <ul className="surface mt-4 divide-y divide-neutral-200 rounded-sm border border-neutral-200 dark:divide-[#2e2e33] dark:border-[#2e2e33]">
               {shown.map((d) => (
-                <li key={d.id} className="flex items-center gap-3 px-4 py-3">
+                <li key={d.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                   <FileText className="size-5 text-accent-500" />
-                  <span className="flex-1 truncate font-medium">{d.name}</span>
-                  <span className="text-sm text-neutral-500">{STATUS_LABEL[d.status]}</span>
-                  <span className="w-20 text-right text-sm text-neutral-500 tabular-nums">{d.sizeKb} KB</span>
+                  <span className="min-w-0 flex-1 truncate font-medium" title={d.title}>
+                    {d.title}
+                  </span>
+                  <span className="text-sm text-neutral-500 tabular-nums">
+                    {d.page_count ?? "?"} pages · {formatSize(d.size_bytes)}
+                  </span>
+                  <DocActions doc={d} />
                 </li>
               ))}
             </ul>

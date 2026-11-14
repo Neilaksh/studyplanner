@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "./supabase";
 import type { Database } from "./database.types";
 
@@ -23,6 +24,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [recovering, setRecovering] = useState(false);
+  const queryClient = useQueryClient();
   const userId = session?.user.id;
 
   useEffect(() => {
@@ -30,10 +32,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data } = supabase.auth.onAuthStateChange((event, next) => {
       setSession(next);
       if (event === "PASSWORD_RECOVERY") setRecovering(true);
-      if (event === "SIGNED_OUT") setRecovering(false);
+      if (event === "SIGNED_OUT") {
+        setRecovering(false);
+        queryClient.clear(); // drop the previous user's cached data
+      }
     });
     return () => data.subscription.unsubscribe();
-  }, []);
+  }, [queryClient]);
 
   const refreshProfile = useCallback(async () => {
     if (!userId) {
