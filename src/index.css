@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --color-accent-50: #fdf1ea;
+  --color-accent-200: #f3c3a6;
+  --color-accent-300: #eda57c;
+  --color-accent-400: #e78653;
+  --color-accent-500: #e06a33;
+  --color-accent-600: #c95520;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-white font-sans text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100;
+}
+
+/* Component classes live in the components layer so utility classes on the same element win. */
+@layer components {
+  /* Primary action: black in light mode, accent orange in dark mode (as in the original). */
+  .btn-primary {
+    @apply bg-neutral-950 text-white hover:bg-neutral-800 dark:bg-accent-500 dark:text-white dark:hover:bg-accent-600;
+  }
+  .btn-secondary {
+    @apply border border-neutral-200 bg-white hover:bg-neutral-50 dark:border-neutral-700 dark:bg-[#1c1c1f] dark:hover:bg-neutral-800;
+  }
+  .field {
+    @apply w-full rounded-[2px] border border-neutral-200 bg-white px-4 py-3 text-[15px] outline-none placeholder:text-neutral-400 focus:border-neutral-950 dark:border-neutral-700 dark:bg-[#1c1c1f] dark:focus:border-accent-500;
+  }
+  .surface {
+    @apply bg-white dark:bg-[#1c1c1f];
+  }
+
+  /* Card with the small corner dots the original uses as decoration. */
+  .dot-card {
+    @apply relative rounded-sm border border-neutral-200 bg-white dark:border-[#2e2e33] dark:bg-[#1c1c1f];
+  }
+  .dot-card::before,
+  .dot-card::after,
+  .dot-card > .dots::before,
+  .dot-card > .dots::after {
+    content: "";
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 9999px;
+    background: var(--color-neutral-300);
+  }
+  /* The dark variant cannot follow a pseudo-element, so the dark dot colour is a plain rule. */
+  .dark .dot-card::before,
+  .dark .dot-card::after,
+  .dark .dot-card > .dots::before,
+  .dark .dot-card > .dots::after {
+    background: #4a4a50;
+  }
+  .dot-card::before { top: 6px; left: 6px; }
+  .dot-card::after { top: 6px; right: 6px; }
+  .dot-card > .dots::before { bottom: 6px; left: 6px; }
+  .dot-card > .dots::after { bottom: 6px; right: 6px; }
+}
+
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #a3a3a3 transparent;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
+}
+.animate-toast-in { animation: toast-in 180ms ease-out; }
