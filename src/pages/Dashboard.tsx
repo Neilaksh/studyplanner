@@ -16,8 +16,30 @@ import {
 import { ActivityHeatmap } from "../components/ActivityHeatmap";
 import { MiniCalendar } from "../components/MiniCalendar";
 import type { NavKey } from "../components/Sidebar";
-import { activity, recentDocuments, sessions, stats, studyPlans } from "../data";
 import { displayName, useAuth } from "../lib/auth";
+import {
+  localIsoDate,
+  toCalendarEvents,
+  useActivityByDay,
+  useDashboardStats,
+  useStudyPlans,
+  useStudySessions,
+} from "../lib/dashboard";
+import { useDocuments, useLibraryMutations } from "../lib/library";
+
+const shortDate = (iso: string) =>
+  new Date(iso + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+
+function LoadError({ what, onRetry }: { what: string; onRetry: () => void }) {
+  return (
+    <p role="alert" className="mt-4 text-sm text-red-500">
+      Could not load {what}.{" "}
+      <button onClick={onRetry} className="font-medium underline">
+        Try again
+      </button>
+    </p>
+  );
+}
 
 function greeting(d = new Date()) {
   const h = d.getHours();
@@ -26,9 +48,21 @@ function greeting(d = new Date()) {
   return "Good evening";
 }
 
-function StatCard({ icon: Icon, tint, value, label }: { icon: LucideIcon; tint: string; value: string; label: string }) {
+function StatCard({
+  icon: Icon,
+  tint,
+  value,
+  label,
+  onClick,
+}: {
+  icon: LucideIcon;
+  tint: string;
+  value: string;
+  label: string;
+  onClick?: () => void;
+}) {
   return (
-    <button className="dot-card flex items-center gap-3 px-4 py-3.5 text-left transition-shadow hover:shadow-sm">
+    <button onClick={onClick} className="dot-card flex items-center gap-3 px-4 py-3.5 text-left transition-shadow hover:shadow-sm">
       <span className="dots" />
       <span className={`grid size-9 shrink-0 place-items-center rounded-sm ${tint}`}>
         <Icon className="size-4" />
@@ -70,8 +104,26 @@ export function Dashboard({ onNavigate }: { onNavigate: (k: NavKey) => void }) {
   const [getStartedOpen, setGetStartedOpen] = useState(true);
   const { user, profile } = useAuth();
   const firstName = displayName(profile, user).split(" ")[0];
-  const minutes = stats.studyMinutes;
-  const studyTime = minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`;
+  const statsQuery = useDashboardStats();
+  const activityQuery = useActivityByDay();
+  const docsQuery = useDocuments();
+  const plansQuery = useStudyPlans();
+  const sessionsQuery = useStudySessions();
+  const { openDocument } = useLibraryMutations();
+
+  const stats = statsQuery.data;
+  const show = (v: number | undefined) => (v === undefined ? "…" : String(v));
+  const minutes = stats?.studyMinutes;
+  const studyTime =
+    minutes === undefined ? "…" : minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`;
+
+  const docs = docsQuery.data ?? [];
+  const hasDocs = docs.length > 0;
+  const recentDocuments = docs.slice(0, 5);
+  const plans = plansQuery.data ?? [];
+  const events = toCalendarEvents(plans, sessionsQuery.data ?? []);
+  const todayIso = localIsoDate(new Date());
+  const upcoming = events.filter((e) => e.date >= todayIso && !e.done).slice(0, 4);
 
   return (
     <div className="mx-auto max-w-[1440px] p-5 sm:p-8">
@@ -101,18 +153,27 @@ export function Dashboard({ onNavigate }: { onNavigate: (k: NavKey) => void }) {
 
       {/* Stats */}
       <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
-        <StatCard icon={FileText} tint="bg-blue-50 text-blue-600 dark:bg-blue-950" value={String(stats.documents)} label="Documents" />
-        <StatCard icon={CheckCircle2} tint="bg-violet-50 text-violet-600 dark:bg-violet-950" value={String(stats.quizzes)} label="Quizzes" />
-        <StatCard icon={HelpCircle} tint="bg-sky-50 text-sky-600 dark:bg-sky-950" value={String(stats.questions)} label="Questions" />
-        <StatCard icon={BarChart3} tint="bg-green-50 text-green-600 dark:bg-green-950" value={stats.avgScore == null ? "—" : `${stats.avgScore}%`} label="Avg Score" />
+        <StatCard icon={FileText} tint="bg-blue-50 text-blue-600 dark:bg-blue-950" value={show(stats?.documents)} label="Documents" onClick={() => onNavigate("pdfs")} />
+        <StatCard icon={CheckCircle2} tint="bg-violet-50 text-violet-600 dark:bg-violet-950" value={show(stats?.quizzes)} label="Quizzes" onClick={() => onNavigate("quizzes")} />
+        <StatCard icon={HelpCircle} tint="bg-sky-50 text-sky-600 dark:bg-sky-950" value={show(stats?.questions)} label="Questions" onClick={() => onNavigate("quizzes")} />
+        <StatCard
+          icon={BarChart3}
+          tint="bg-green-50 text-green-600 dark:bg-green-950"
+          value={!stats ? "…" : stats.avgScore == null ? "—" : `${stats.avgScore}%`}
+          label="Avg Score"
+          onClick={() => onNavigate("quizzes")}
+        />
         <StatCard icon={Clock} tint="bg-accent-50 text-accent-500 dark:bg-accent-500/15" value={studyTime} label="Study Time" />
       </div>
+      {statsQuery.isError && <LoadError what="your stats" onRetry={() => void statsQuery.refetch()} />}
 
       {/* Two-column body */}
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_344px]">
         <div className="min-w-0 space-y-6">
-          <ActivityHeatmap activity={activity} />
+          <ActivityHeatmap activity={activityQuery.data ?? {}} />
+          {activityQuery.isError && <LoadError what="your activity" onRetry={() => void activityQuery.refetch()} />}
 
+          {docsQuery.isSuccess && !hasDocs && (
           <section className="dot-card px-6 py-6">
             <span className="dots" />
             <div className="flex items-center gap-4">
@@ -126,7 +187,9 @@ export function Dashboard({ onNavigate }: { onNavigate: (k: NavKey) => void }) {
                 <h2 className="mt-1 font-bold">Start Your Learning Journey</h2>
                 {getStartedOpen && <p className="text-sm text-neutral-500">Upload a PDF to get started</p>}
               </div>
-              <ArrowRight className="size-5 text-accent-500" />
+              <button onClick={() => onNavigate("pdfs")} aria-label="Go to My PDFs" className="grid size-8 place-items-center rounded hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                <ArrowRight className="size-5 text-accent-500" />
+              </button>
               <button
                 onClick={() => setGetStartedOpen((o) => !o)}
                 aria-label={getStartedOpen ? "Collapse card" : "Expand card"}
@@ -136,11 +199,14 @@ export function Dashboard({ onNavigate }: { onNavigate: (k: NavKey) => void }) {
               </button>
             </div>
           </section>
+          )}
 
           <section className="dot-card p-6">
             <span className="dots" />
             <SectionHeading icon={GraduationCap}>Study Plans</SectionHeading>
-            {studyPlans.length === 0 ? (
+            {plansQuery.isError ? (
+              <LoadError what="your study plans" onRetry={() => void plansQuery.refetch()} />
+            ) : plans.length === 0 ? (
               <EmptyState
                 title="No Study Plans Yet"
                 body="Create an AI-powered study plan to organize your learning."
@@ -149,10 +215,12 @@ export function Dashboard({ onNavigate }: { onNavigate: (k: NavKey) => void }) {
               />
             ) : (
               <ul className="mt-4 divide-y divide-neutral-200 dark:divide-neutral-800">
-                {studyPlans.map((p) => (
-                  <li key={p.id} className="py-3">
-                    <p className="font-medium">{p.title}</p>
-                    <p className="text-sm text-neutral-500">Exam: {p.exam}</p>
+                {plans.map((p) => (
+                  <li key={p.id}>
+                    <button onClick={() => onNavigate("planner")} className="w-full py-3 text-left">
+                      <p className="font-medium">{p.title}</p>
+                      <p className="text-sm text-neutral-500">Exam {shortDate(p.exam_date)}</p>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -162,15 +230,25 @@ export function Dashboard({ onNavigate }: { onNavigate: (k: NavKey) => void }) {
           <section className="dot-card p-6">
             <span className="dots" />
             <SectionHeading icon={FileText}>Recent Documents</SectionHeading>
-            {recentDocuments.length === 0 ? (
+            {docsQuery.isError ? (
+              <LoadError what="your documents" onRetry={() => void docsQuery.refetch()} />
+            ) : docsQuery.isPending ? (
+              <p className="mt-4 text-sm text-neutral-400">Loading…</p>
+            ) : recentDocuments.length === 0 ? (
               <p className="mt-4 text-sm text-neutral-500">No documents uploaded yet.</p>
             ) : (
               <ul className="mt-4 divide-y divide-neutral-200 dark:divide-neutral-800">
                 {recentDocuments.map((d) => (
-                  <li key={d.id} className="flex items-center gap-3 py-3">
-                    <FileText className="size-5 text-blue-600" />
-                    <span className="flex-1 font-medium">{d.name}</span>
-                    <span className="text-sm text-neutral-500">{d.pages} pages</span>
+                  <li key={d.id}>
+                    <button
+                      onClick={() => openDocument.mutate(d)}
+                      title="Open PDF"
+                      className="flex w-full items-center gap-3 py-3 text-left hover:text-accent-500"
+                    >
+                      <FileText className="size-5 shrink-0 text-blue-600" />
+                      <span className="min-w-0 flex-1 truncate font-medium">{d.title}</span>
+                      <span className="shrink-0 text-sm text-neutral-500">{d.page_count ?? "?"} pages</span>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -179,12 +257,14 @@ export function Dashboard({ onNavigate }: { onNavigate: (k: NavKey) => void }) {
         </div>
 
         <div className="space-y-6">
-          <MiniCalendar sessions={sessions} />
+          <MiniCalendar events={events} />
 
           <section className="dot-card p-6">
             <span className="dots" />
             <SectionHeading icon={CalendarDays}>Next Up</SectionHeading>
-            {sessions.length === 0 ? (
+            {sessionsQuery.isError ? (
+              <LoadError what="your sessions" onRetry={() => void sessionsQuery.refetch()} />
+            ) : upcoming.length === 0 ? (
               <div className="mt-6 text-center">
                 <p className="font-semibold">No Sessions Scheduled</p>
                 <p className="mt-1 text-sm text-neutral-500">Add sessions to your study plans</p>
@@ -196,16 +276,21 @@ export function Dashboard({ onNavigate }: { onNavigate: (k: NavKey) => void }) {
                 </button>
               </div>
             ) : (
-              <ul className="mt-4 space-y-2">
-                {sessions.map((s) => (
-                  <li key={s.id} className="text-sm">
-                    {s.title} — {new Date(s.date).toLocaleDateString()}
+              <ul className="mt-4 space-y-3">
+                {upcoming.map((e) => (
+                  <li key={e.id} className="flex items-start gap-3 text-sm">
+                    <span className={`mt-1.5 size-2 shrink-0 rounded-[2px] ${e.kind === "exam" ? "bg-red-500" : "bg-neutral-400"}`} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">{e.title}</span>
+                      <span className="text-neutral-500">{e.date === todayIso ? "Today" : shortDate(e.date)}</span>
+                    </span>
                   </li>
                 ))}
               </ul>
             )}
           </section>
 
+          {docsQuery.isSuccess && !hasDocs && (
           <section className="dot-card p-6">
             <span className="dots" />
             <h2 className="flex items-center gap-2.5 text-lg font-bold">
@@ -219,6 +304,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (k: NavKey) => void }) {
               <UploadCloud className="size-4" /> Upload First PDF
             </button>
           </section>
+          )}
         </div>
       </div>
     </div>

@@ -21,9 +21,11 @@ function level(count: number) {
   return 4;
 }
 
+// Consecutive active days ending today, or ending yesterday if nothing is logged yet today.
 function streak(activity: Record<string, number>, today: Date) {
   let n = 0;
   const d = new Date(today);
+  if (!activity[iso(d)]) d.setDate(d.getDate() - 1);
   while ((activity[iso(d)] ?? 0) > 0) {
     n++;
     d.setDate(d.getDate() - 1);
@@ -31,7 +33,9 @@ function streak(activity: Record<string, number>, today: Date) {
   return n;
 }
 
-export function ActivityHeatmap({ activity, today = new Date() }: { activity: Record<string, number>; today?: Date }) {
+export function ActivityHeatmap({ activity }: { activity: Record<string, number> }) {
+  const todayKey = new Date().toDateString();
+  const today = useMemo(() => new Date(todayKey), [todayKey]);
   const scroller = useRef<HTMLDivElement>(null);
 
   // 53 week columns ending with the week containing today, Sunday-first.

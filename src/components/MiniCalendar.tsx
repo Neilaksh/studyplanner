@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
-import type { Session } from "../data";
+import { localIsoDate, type CalendarEvent } from "../lib/dashboard";
 
 const DOW = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
 const sameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
-export function MiniCalendar({ sessions, today = new Date() }: { sessions: Session[]; today?: Date }) {
+export function MiniCalendar({ events, today = new Date() }: { events: CalendarEvent[]; today?: Date }) {
   const [view, setView] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
 
   const first = new Date(view.getFullYear(), view.getMonth(), 1);
@@ -21,7 +21,11 @@ export function MiniCalendar({ sessions, today = new Date() }: { sessions: Sessi
     cells.push({ date: new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1), inMonth: false });
   }
 
-  const kindOn = (d: Date) => sessions.find((s) => sameDay(new Date(s.date), d))?.kind;
+  // Dates are compared as local YYYY-MM-DD strings; an exam outranks a session on the same day.
+  const kindOn = (d: Date) => {
+    const onDay = events.filter((e) => e.date === localIsoDate(d));
+    return onDay.some((e) => e.kind === "exam") ? "exam" : onDay.length ? "session" : undefined;
+  };
   const shift = (n: number) => setView(new Date(view.getFullYear(), view.getMonth() + n, 1));
 
   return (
