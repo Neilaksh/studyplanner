@@ -10,11 +10,13 @@ import {
   List,
   Loader2,
   Search,
+  Sparkles,
   Trash2,
   UploadCloud,
   X,
 } from "lucide-react";
 import { PageBody, PageHeader } from "../components/ui";
+import { StudyPanel } from "../components/StudyPanel";
 import {
   uploadPdf,
   useDocuments,
@@ -67,8 +69,16 @@ function Count({ n, active }: { n: number; active?: boolean }) {
 function DocActions({ doc }: { doc: DocumentRow }) {
   const { openDocument, updateDocument, deleteDocument } = useLibraryMutations();
   const { data: folders = [] } = useFolders();
+  const [studying, setStudying] = useState(false);
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {studying && <StudyPanel doc={doc} onClose={() => setStudying(false)} />}
+      <button
+        onClick={() => setStudying(true)}
+        className="btn-secondary flex items-center gap-1.5 rounded-[2px] px-3 py-1.5 text-sm font-medium"
+      >
+        <Sparkles className="size-3.5 text-accent-500" /> Study
+      </button>
       <button
         onClick={() => openDocument.mutate(doc)}
         className="btn-primary flex items-center gap-1.5 rounded-[2px] px-3 py-1.5 text-sm font-medium"
