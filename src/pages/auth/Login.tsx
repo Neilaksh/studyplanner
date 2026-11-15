@@ -87,19 +87,6 @@ export function Login() {
           Sign in {!busy && <ArrowRight className="size-4" />}
         </button>
       </form>
-      <p className="mt-6 text-center text-sm text-neutral-500">
-        Don't have an account?{" "}
-        <a
-          href="/register"
-          onClick={(e) => {
-            e.preventDefault();
-            navigate("/register");
-          }}
-          className="font-semibold text-accent-500 hover:underline"
-        >
-          Create free account
-        </a>
-      </p>
     </AuthLayout>
   );
 }
