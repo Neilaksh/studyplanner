@@ -1,22 +1,12 @@
-import {
-  Bell,
-  ChevronDown,
-  ChevronsLeft,
-  ChevronsRight,
-  ClipboardList,
-  FileText,
-  Globe,
-  MessageCircle,
-  Moon,
-  Search,
-  Sun,
-} from "lucide-react";
+import { ChevronsLeft, ChevronsRight, ClipboardList, FileText, Menu, Moon, Search, Sun } from "lucide-react";
 import { Logo } from "./Logo";
 import { useEffect, useRef, useState } from "react";
 import { LogOut, Settings as SettingsIcon } from "lucide-react";
 import { displayName, useAuth } from "../lib/auth";
 import { navigate } from "../router";
-import { AnimatePresence } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
+import { Notifications } from "./Notifications";
+import { useDashboardStats } from "../lib/dashboard";
 import { Pop } from "./motion";
 
 function AccountMenu() {
@@ -71,22 +61,25 @@ function AccountMenu() {
 type Props = {
   collapsed: boolean;
   onToggleSidebar: () => void;
+  onOpenMenu: () => void;
+  onOpenSearch: () => void;
   dark: boolean;
   onToggleTheme: () => void;
 };
 
 const iconBtn =
-  "grid size-10 place-items-center rounded-md text-neutral-800 hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-800";
+  "relative grid size-10 place-items-center rounded-md text-neutral-800 transition-colors hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-800";
 
-export function Topbar({ collapsed, onToggleSidebar, dark, onToggleTheme }: Props) {
+export function Topbar({ collapsed, onToggleSidebar, onOpenMenu, onOpenSearch, dark, onToggleTheme }: Props) {
+  const stats = useDashboardStats();
+  const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-4 sm:px-6 dark:border-[#2e2e33] dark:bg-[#1c1c1f]">
-      <div className="flex items-center gap-4">
-        <button
-          className={iconBtn}
-          onClick={onToggleSidebar}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
+    <header className="flex h-16 shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-3 sm:px-6 dark:border-[#2e2e33] dark:bg-[#1c1c1f]">
+      <div className="flex items-center gap-2 sm:gap-4">
+        <button className={`${iconBtn} md:hidden`} onClick={onOpenMenu} aria-label="Open menu">
+          <Menu className="size-5" />
+        </button>
+        <button className={`${iconBtn} hidden md:grid`} onClick={onToggleSidebar} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
           {collapsed ? <ChevronsRight className="size-5" /> : <ChevronsLeft className="size-5" />}
         </button>
         <a
@@ -103,39 +96,39 @@ export function Topbar({ collapsed, onToggleSidebar, dark, onToggleTheme }: Prop
 
       <div className="flex items-center gap-1 sm:gap-2">
         <span className="hidden gap-1 rounded-md border border-neutral-200 p-1 md:flex dark:border-[#2e2e33]">
-          <span
-            className="flex items-center gap-1.5 rounded bg-accent-50 px-2 py-1 text-sm font-semibold text-accent-500 dark:bg-accent-500/15"
+          <button
+            onClick={() => navigate("/pdfs")}
+            className="flex items-center gap-1.5 rounded bg-accent-50 px-2 py-1 text-sm font-semibold text-accent-500 transition-colors hover:bg-accent-500/20 dark:bg-accent-500/15"
             title="PDFs"
           >
-            <FileText className="size-4" /> 0
-          </span>
-          <span
-            className="flex items-center gap-1.5 rounded bg-accent-50 px-2 py-1 text-sm font-semibold text-accent-500 dark:bg-accent-500/15"
+            <FileText className="size-4" /> {stats.data?.documents ?? "…"}
+          </button>
+          <button
+            onClick={() => navigate("/quiz-history")}
+            className="flex items-center gap-1.5 rounded bg-accent-50 px-2 py-1 text-sm font-semibold text-accent-500 transition-colors hover:bg-accent-500/20 dark:bg-accent-500/15"
             title="Quizzes"
           >
-            <ClipboardList className="size-4" /> 0
-          </span>
+            <ClipboardList className="size-4" /> {stats.data?.quizzes ?? "…"}
+          </button>
         </span>
-        <a
-          href="#"
-          className="hidden items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold hover:bg-neutral-100 lg:flex dark:hover:bg-neutral-800"
+        <button
+          onClick={onOpenSearch}
+          aria-label="Search"
+          className="hidden items-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-sm text-neutral-500 transition-colors hover:bg-neutral-50 lg:flex dark:border-[#2e2e33] dark:hover:bg-neutral-800"
         >
-          <MessageCircle className="size-5" /> Join Community
-        </a>
-        <button className={iconBtn} aria-label="Search">
+          <Search className="size-4" /> Search
+          <kbd className="ml-4 rounded border border-neutral-200 px-1.5 text-xs dark:border-[#2e2e33]">{isMac ? "⌘" : "Ctrl"} K</kbd>
+        </button>
+        <button className={`${iconBtn} lg:hidden`} onClick={onOpenSearch} aria-label="Search">
           <Search className="size-5" />
         </button>
-        <button
-          className="hidden items-center gap-1.5 rounded-md px-3 py-2 text-sm hover:bg-neutral-100 sm:flex dark:hover:bg-neutral-800"
-          aria-label="Language: English"
-        >
-          <Globe className="size-4 text-neutral-500" /> English <ChevronDown className="size-4 text-neutral-500" />
-        </button>
-        <button className={iconBtn} aria-label="Notifications">
-          <Bell className="size-5" />
-        </button>
+        <Notifications buttonClass={iconBtn} />
         <button className={iconBtn} onClick={onToggleTheme} aria-label="Toggle theme">
-          {dark ? <Moon className="size-5" /> : <Sun className="size-5" />}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span key={dark ? "moon" : "sun"} initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.2 }}>
+              {dark ? <Moon className="size-5" /> : <Sun className="size-5" />}
+            </motion.span>
+          </AnimatePresence>
         </button>
         <AccountMenu />
       </div>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { PageTransition } from "./components/motion";
@@ -7,14 +7,18 @@ import { Topbar } from "./components/Topbar";
 import { Toast } from "./components/Toast";
 import { useAuth } from "./lib/auth";
 import { navigate, usePath } from "./router";
-import { Dashboard } from "./pages/Dashboard";
-import { MyPdfs } from "./pages/MyPdfs";
-import { QuizHistory } from "./pages/QuizHistory";
-import { StudyPlanner } from "./pages/StudyPlanner";
-import { Settings } from "./pages/Settings";
-import { QuizPlayer } from "./pages/QuizPlayer";
+import { MobileNav } from "./components/MobileNav";
 import { Login } from "./pages/auth/Login";
 import { ForgotPassword, ResetPassword } from "./pages/auth/PasswordReset";
+
+// Each page is its own chunk, downloaded the first time it is opened.
+const Dashboard = lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
+const MyPdfs = lazy(() => import("./pages/MyPdfs").then((m) => ({ default: m.MyPdfs })));
+const QuizHistory = lazy(() => import("./pages/QuizHistory").then((m) => ({ default: m.QuizHistory })));
+const StudyPlanner = lazy(() => import("./pages/StudyPlanner").then((m) => ({ default: m.StudyPlanner })));
+const Settings = lazy(() => import("./pages/Settings").then((m) => ({ default: m.Settings })));
+const QuizPlayer = lazy(() => import("./pages/QuizPlayer").then((m) => ({ default: m.QuizPlayer })));
+const SearchPalette = lazy(() => import("./components/SearchPalette").then((m) => ({ default: m.SearchPalette })));
 
 const PAGES: Record<NavKey, React.ComponentType<{ onNavigate: (k: NavKey) => void }>> = {
   dashboard: Dashboard,
@@ -23,6 +27,12 @@ const PAGES: Record<NavKey, React.ComponentType<{ onNavigate: (k: NavKey) => voi
   planner: StudyPlanner,
   settings: Settings,
 };
+
+const pageFallback = (
+  <div className="grid h-64 place-items-center text-neutral-400">
+    <Loader2 className="size-6 animate-spin" aria-label="Loading page" />
+  </div>
+);
 
 const SIGNED_OUT_ONLY = ["/login", "/forgot-password"];
 const go = (k: NavKey) => navigate(NAV.find((n) => n.key === k)!.path);
@@ -109,21 +119,50 @@ function Shell({ path, dark, onToggleTheme }: { path: string; dark: boolean; onT
   const [collapsed, setCollapsed] = useState(false);
   const [toast, setToast] = useState<string | null>(() => (takeWelcomeFlag() ? "Welcome back!" : null));
   const closeToast = useCallback(() => setToast(null), []);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const closeSearch = useCallback(() => setSearchOpen(false), []);
 
   useEffect(() => {
     document.getElementById("main-content")?.scrollTo({ top: 0 });
   }, [active]);
 
+  // Ctrl/⌘ + K opens search from anywhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen((o) => !o);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
     <div className="flex h-full flex-col">
-      <Topbar collapsed={collapsed} onToggleSidebar={() => setCollapsed((c) => !c)} dark={dark} onToggleTheme={onToggleTheme} />
+      <Topbar
+        collapsed={collapsed}
+        onToggleSidebar={() => setCollapsed((c) => !c)}
+        onOpenMenu={() => setMenuOpen(true)}
+        onOpenSearch={() => setSearchOpen(true)}
+        dark={dark}
+        onToggleTheme={onToggleTheme}
+      />
       <AnimatePresence>{toast && <Toast key="toast" message={toast} onClose={closeToast} />}</AnimatePresence>
+      <AnimatePresence>{menuOpen && <MobileNav key="menu" active={active} onSelect={go} onClose={closeMenu} />}</AnimatePresence>
+      <Suspense fallback={null}>
+        <AnimatePresence>{searchOpen && <SearchPalette key="search" onClose={closeSearch} />}</AnimatePresence>
+      </Suspense>
       <div className="flex min-h-0 flex-1">
         <Sidebar collapsed={collapsed} active={active} onSelect={go} />
         <main id="main-content" className="thin-scroll min-w-0 flex-1 overflow-y-auto bg-[#faf9f8] dark:bg-[#232327]">
           {/* Pages cross-fade: the old one leaves before the new one enters. */}
           <AnimatePresence mode="wait" initial={false}>
-            <PageTransition key={path}>{quizId ? <QuizPlayer quizId={quizId} /> : <Page onNavigate={go} />}</PageTransition>
+            <PageTransition key={path}>
+              <Suspense fallback={pageFallback}>{quizId ? <QuizPlayer quizId={quizId} /> : <Page onNavigate={go} />}</Suspense>
+            </PageTransition>
           </AnimatePresence>
         </main>
       </div>

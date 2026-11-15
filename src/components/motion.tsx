@@ -62,10 +62,11 @@ export function Backdrop({ children, onClick, className = "" }: { children: Reac
 }
 
 /** Dialog surface: "center" scales up from slightly below, "right" slides in from the edge. */
-export function Panel({ from = "center", children, ...rest }: HTMLMotionProps<"div"> & { from?: "center" | "right" }) {
+export function Panel({ from = "center", children, ...rest }: HTMLMotionProps<"div"> & { from?: "center" | "right" | "left" }) {
+  const edge = from === "left" ? "-100%" : "100%";
   const motionProps =
-    from === "right"
-      ? { initial: { x: "100%" }, animate: { x: 0, transition: SOFT_SPRING }, exit: { x: "100%", transition: { duration: 0.22, ease: "easeIn" as const } } }
+    from !== "center"
+      ? { initial: { x: edge }, animate: { x: 0, transition: SOFT_SPRING }, exit: { x: edge, transition: { duration: 0.22, ease: "easeIn" as const } } }
       : {
           initial: { opacity: 0, y: 16, scale: 0.97 },
           animate: { opacity: 1, y: 0, scale: 1, transition: SPRING },
