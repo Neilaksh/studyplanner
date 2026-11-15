@@ -6,6 +6,7 @@ import {
   ListTree,
   Loader2,
   MessageCircleQuestion,
+  Play,
   RefreshCw,
   Sparkles,
   Trash2,
@@ -14,10 +15,11 @@ import {
 import { useAiActions, useChapters, useDeleteQuiz, useQuizzes, useSummaries, type SummaryRow } from "../lib/ai";
 import type { DocumentRow } from "../lib/library";
 import { Markdown } from "./Markdown";
+import { navigate } from "../router";
 
 type Output =
   | { kind: "summary"; title: string; content: string; fromSaved: boolean; chapterId?: string }
-  | { kind: "quiz"; title: string; count: number; truncated: boolean }
+  | { kind: "quiz"; id: string; title: string; count: number; truncated: boolean }
   | { kind: "explanation"; question: string; content: string };
 
 type Explanation = { question: string; answer: string; at: number };
@@ -93,7 +95,7 @@ export function StudyPanel({ doc, onClose }: { doc: DocumentRow; onClose: () => 
   const doQuiz = (title: string, chapterId?: string) =>
     run(`Writing a quiz on ${title}…`, async () => {
       const r = await generateQuiz.mutateAsync({ chapterId });
-      setOutput({ kind: "quiz", title: r.title, count: r.question_count, truncated: r.source_truncated });
+      setOutput({ kind: "quiz", id: r.quiz_id, title: r.title, count: r.question_count, truncated: r.source_truncated });
     });
 
   const doChapters = (force: boolean) => {
@@ -174,10 +176,15 @@ export function StudyPanel({ doc, onClose }: { doc: DocumentRow; onClose: () => 
                 </>
               )}
               {output.kind === "quiz" && (
-                <p className="text-sm">
-                  Created <strong>{output.title}</strong> with {output.count} questions — it's listed under Saved quizzes below.
-                  {output.truncated && " The material was long, so it covers the first part only."}
-                </p>
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <p className="flex-1">
+                    Created <strong>{output.title}</strong> with {output.count} questions.
+                    {output.truncated && " The material was long, so it covers the first part only."}
+                  </p>
+                  <button onClick={() => navigate(`/quiz/${output.id}`)} className={`btn-primary ${small}`}>
+                    <Play className="size-3.5" /> Take it now
+                  </button>
+                </div>
               )}
               {output.kind === "explanation" && (
                 <>
@@ -264,6 +271,12 @@ export function StudyPanel({ doc, onClose }: { doc: DocumentRow; onClose: () => 
                         </span>
                       </span>
                       <button
+                        onClick={() => navigate(`/quiz/${q.id}`)}
+                        className={`btn-primary ${small}`}
+                      >
+                        <Play className="size-3.5" /> Start
+                      </button>
+                      <button
                         onClick={() => {
                           if (window.confirm(`Delete the quiz "${q.title}"? This cannot be undone.`)) deleteQuiz.mutate(q.id);
                         }}
@@ -276,7 +289,6 @@ export function StudyPanel({ doc, onClose }: { doc: DocumentRow; onClose: () => 
                     </li>
                   ))}
                 </ul>
-                <p className="mt-2 text-xs text-neutral-500">Taking quizzes comes in the next step.</p>
               </>
             )}
           </section>

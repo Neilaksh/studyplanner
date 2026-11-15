@@ -77,9 +77,14 @@ export function useStudySessions() {
 }
 
 /** Sessions plus each plan's exam date, for the calendar and "Next Up". */
-export function toCalendarEvents(plans: StudyPlanRow[], sessions: StudySessionRow[]): CalendarEvent[] {
+export function toCalendarEvents(allPlans: StudyPlanRow[], sessions: StudySessionRow[]): CalendarEvent[] {
+  // Paused plans stay off the dashboard until resumed; skipped sessions count as done.
+  const plans = allPlans.filter((p) => p.status !== "paused");
+  const activeIds = new Set(plans.map((p) => p.id));
   return [
-    ...sessions.map((s) => ({ id: s.id, title: s.title, date: s.scheduled_for, kind: s.kind, done: !!s.completed_at })),
+    ...sessions
+      .filter((s) => activeIds.has(s.plan_id))
+      .map((s) => ({ id: s.id, title: s.title, date: s.scheduled_for, kind: s.kind, done: s.status === "completed" || s.status === "skipped" })),
     ...plans.map((p) => ({ id: `exam-${p.id}`, title: `${p.title} exam`, date: p.exam_date, kind: "exam" as const, done: false })),
   ].sort((a, b) => a.date.localeCompare(b.date));
 }

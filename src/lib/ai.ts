@@ -1,5 +1,5 @@
 // Client side of the AI Edge Functions: one typed caller per function plus chapter/summary queries.
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import type { Database } from "./database.types";
@@ -8,7 +8,7 @@ export type ChapterRow = Database["public"]["Tables"]["document_chapters"]["Row"
 export type SummaryRow = Database["public"]["Tables"]["summaries"]["Row"];
 
 /** Calls an Edge Function and turns its `{ error }` body into a readable Error. */
-async function call<T>(name: string, body: Record<string, unknown>): Promise<T> {
+export async function callFunction<T>(name: string, body: Record<string, unknown>): Promise<T> {
   // Send the user's access token explicitly, refreshing it first if it is about to expire.
   let { data: auth } = await supabase.auth.getSession();
   const expiresSoon = !!auth.session?.expires_at && auth.session.expires_at * 1000 < Date.now() + 60_000;
@@ -34,18 +34,33 @@ async function call<T>(name: string, body: Record<string, unknown>): Promise<T> 
   return data as T;
 }
 
+/** One query definition per document, shared by single- and multi-document views so caches line up. */
+const chaptersQuery = (documentId: string) => ({
+  queryKey: ["chapters", documentId],
+  enabled: !!documentId,
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("document_chapters")
+      .select("*")
+      .eq("document_id", documentId)
+      .order("position");
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  },
+});
+
 export function useChapters(documentId: string) {
-  return useQuery({
-    queryKey: ["chapters", documentId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("document_chapters")
-        .select("*")
-        .eq("document_id", documentId)
-        .order("position");
-      if (error) throw new Error(error.message);
-      return data ?? [];
-    },
+  return useQuery(chaptersQuery(documentId));
+}
+
+/** Chapters for several documents, keyed by document id; `pending` is true until all have loaded. */
+export function useChaptersFor(documentIds: string[]) {
+  return useQueries({
+    queries: documentIds.map(chaptersQuery),
+    combine: (results) => ({
+      byDocument: Object.fromEntries(documentIds.map((id, i) => [id, results[i]?.data ?? []])) as Record<string, ChapterRow[]>,
+      pending: results.some((r) => r.isPending),
+    }),
   });
 }
 
@@ -112,13 +127,13 @@ export function useAiActions(documentId: string) {
 
   const extractChapters = useMutation({
     mutationFn: (force: boolean) =>
-      call<{ chapters: ChapterRow[]; cached: boolean }>("extract-chapters", { document_id: documentId, force }),
+      callFunction<{ chapters: ChapterRow[]; cached: boolean }>("extract-chapters", { document_id: documentId, force }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["chapters", documentId] }),
   });
 
   const summarize = useMutation({
     mutationFn: (v: { chapterId?: string; force?: boolean }) =>
-      call<{ summary: SummaryRow; cached: boolean }>("summarize", {
+      callFunction<{ summary: SummaryRow; cached: boolean }>("summarize", {
         document_id: documentId,
         chapter_id: v.chapterId,
         force: v.force,
@@ -131,7 +146,7 @@ export function useAiActions(documentId: string) {
 
   const generateQuiz = useMutation({
     mutationFn: (v: { chapterId?: string; count?: number }) =>
-      call<{ quiz_id: string; title: string; question_count: number; source_truncated: boolean }>("generate-quiz", {
+      callFunction<{ quiz_id: string; title: string; question_count: number; source_truncated: boolean }>("generate-quiz", {
         document_id: documentId,
         chapter_id: v.chapterId,
         count: v.count ?? 8,
@@ -144,7 +159,7 @@ export function useAiActions(documentId: string) {
 
   const explain = useMutation({
     mutationFn: (v: { text: string; page?: number }) =>
-      call<{ explanation: string }>("explain", { document_id: documentId, text: v.text, page: v.page }),
+      callFunction<{ explanation: string }>("explain", { document_id: documentId, text: v.text, page: v.page }),
     onSuccess: refreshStats,
   });
 

@@ -10,6 +10,7 @@ import { MyPdfs } from "./pages/MyPdfs";
 import { QuizHistory } from "./pages/QuizHistory";
 import { StudyPlanner } from "./pages/StudyPlanner";
 import { Settings } from "./pages/Settings";
+import { QuizPlayer } from "./pages/QuizPlayer";
 import { Login } from "./pages/auth/Login";
 import { ForgotPassword, ResetPassword } from "./pages/auth/PasswordReset";
 
@@ -85,7 +86,9 @@ export default function App() {
 }
 
 function Shell({ path, dark, onToggleTheme }: { path: string; dark: boolean; onToggleTheme: () => void }) {
-  const active = NAV.find((n) => n.path === path)?.key ?? "dashboard";
+  // "/quiz/<id>" plays a quiz; it belongs to the Quiz History section.
+  const quizId = /^\/quiz\/([0-9a-f-]{36})$/i.exec(path)?.[1] ?? null;
+  const active = quizId ? "quizzes" : (NAV.find((n) => n.path === path)?.key ?? "dashboard");
   const Page = PAGES[active];
   const [collapsed, setCollapsed] = useState(false);
   const [toast, setToast] = useState<string | null>(() => (takeWelcomeFlag() ? "Welcome back!" : null));
@@ -102,7 +105,7 @@ function Shell({ path, dark, onToggleTheme }: { path: string; dark: boolean; onT
       <div className="flex min-h-0 flex-1">
         <Sidebar collapsed={collapsed} active={active} onSelect={go} />
         <main id="main-content" className="thin-scroll min-w-0 flex-1 overflow-y-auto bg-[#faf9f8] dark:bg-[#232327]">
-          <Page onNavigate={go} />
+          {quizId ? <QuizPlayer key={quizId} quizId={quizId} /> : <Page onNavigate={go} />}
         </main>
       </div>
     </div>
