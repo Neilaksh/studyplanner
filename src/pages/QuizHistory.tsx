@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { BarChart3, ClipboardList, FileText, Loader2, Play, RotateCcw, Zap } from "lucide-react";
 import { IconTile, PageBody, PageHeader } from "../components/ui";
+import { AnimatePresence, motion } from "motion/react";
+import { AnimatedNumber, Stagger, StaggerItem } from "../components/motion";
 import { useAllQuizzes, useAttempts } from "../lib/quizzes";
 import { navigate } from "../router";
 
@@ -15,7 +17,7 @@ const scoreColor = (s: number) => (s >= 70 ? "text-green-600" : s >= 50 ? "text-
 
 function Stat({ icon: Icon, value, label }: { icon: typeof Zap; value: React.ReactNode; label: string }) {
   return (
-    <div className="dot-card flex items-center gap-3 px-4 py-3.5">
+    <StaggerItem className="dot-card lift flex items-center gap-3 px-4 py-3.5">
       <span className="dots" />
       <span className="grid size-9 shrink-0 place-items-center rounded-sm bg-accent-50 text-accent-500 dark:bg-accent-500/15">
         <Icon className="size-4" />
@@ -24,7 +26,7 @@ function Stat({ icon: Icon, value, label }: { icon: typeof Zap; value: React.Rea
         <span className="block text-2xl leading-none font-bold">{value}</span>
         <span className="mt-1.5 block text-sm text-neutral-500">{label}</span>
       </span>
-    </div>
+    </StaggerItem>
   );
 }
 
@@ -56,9 +58,9 @@ export function QuizHistory() {
     <PageBody>
       <PageHeader title="Quiz History" subtitle="Track your progress and review past quiz attempts" />
 
-      <div className="mt-8 grid gap-4 md:grid-cols-3">
-        <Stat icon={BarChart3} value={<span className={scored.length ? scoreColor(avg) : "text-red-500"}>{avg}%</span>} label="Average Score" />
-        <Stat icon={ClipboardList} value={attempts.length} label="Quizzes Taken" />
+      <Stagger className="mt-8 grid gap-4 md:grid-cols-3">
+        <Stat icon={BarChart3} value={<span className={scored.length ? scoreColor(avg) : "text-red-500"}><AnimatedNumber value={avg} format={(n) => `${Math.round(n)}%`} /></span>} label="Average Score" />
+        <Stat icon={ClipboardList} value={<AnimatedNumber value={attempts.length} />} label="Quizzes Taken" />
         <Stat
           icon={Zap}
           value={
@@ -68,14 +70,19 @@ export function QuizHistory() {
           }
           label="Performance"
         />
-      </div>
+      </Stagger>
 
       {notTaken.length > 0 && (
         <section className="mt-8">
           <h2 className="text-lg font-bold">Ready to take</h2>
           <ul className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {notTaken.map((q) => (
-              <li key={q.id} className="dot-card flex items-center gap-3 p-4">
+            {notTaken.map((q, i) => (
+              <motion.li
+                key={q.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0, transition: { delay: 0.1 + Math.min(i, 8) * 0.05, duration: 0.3 } }}
+                className="dot-card lift flex items-center gap-3 p-4"
+              >
                 <span className="dots" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium" title={q.title}>
@@ -88,7 +95,7 @@ export function QuizHistory() {
                 <button onClick={() => navigate(`/quiz/${q.id}`)} className="btn-primary flex items-center gap-1.5 rounded-[2px] px-3 py-1.5 text-sm font-medium">
                   <Play className="size-3.5" /> Start
                 </button>
-              </li>
+              </motion.li>
             ))}
           </ul>
         </section>
@@ -129,8 +136,16 @@ export function QuizHistory() {
         </div>
       ) : (
         <ul className="surface mt-6 divide-y divide-neutral-200 rounded-sm border border-neutral-200 dark:divide-[#2e2e33] dark:border-[#2e2e33]">
-          {shown.map((a) => (
-            <li key={a.id} className="flex flex-wrap items-center gap-4 px-6 py-4">
+          <AnimatePresence initial={false}>
+          {shown.map((a, i) => (
+            <motion.li
+              key={a.id}
+              layout
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0, transition: { delay: Math.min(i, 10) * 0.03, duration: 0.25 } }}
+              exit={{ opacity: 0, height: 0 }}
+              className="flex flex-wrap items-center gap-4 px-6 py-4 transition-colors hover:bg-neutral-50 dark:hover:bg-[#202024]"
+            >
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold">{a.quiz_title}</p>
                 <p className="truncate text-sm text-neutral-500">{[a.document_title, a.chapter_title].filter(Boolean).join(" · ")}</p>
@@ -145,8 +160,9 @@ export function QuizHistory() {
               >
                 <RotateCcw className="size-3.5" /> Retake
               </button>
-            </li>
+            </motion.li>
           ))}
+          </AnimatePresence>
         </ul>
       )}
     </PageBody>

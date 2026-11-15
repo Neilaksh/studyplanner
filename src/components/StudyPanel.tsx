@@ -15,6 +15,8 @@ import {
 import { useAiActions, useChapters, useDeleteQuiz, useQuizzes, useSummaries, type SummaryRow } from "../lib/ai";
 import type { DocumentRow } from "../lib/library";
 import { Markdown } from "./Markdown";
+import { AnimatePresence, motion } from "motion/react";
+import { Backdrop, Panel } from "./motion";
 import { navigate } from "../router";
 
 type Output =
@@ -120,11 +122,11 @@ export function StudyPanel({ doc, onClose }: { doc: DocumentRow; onClose: () => 
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-black/40" onClick={onClose}>
-      <aside
+    <Backdrop onClick={onClose} className="flex justify-end">
+      <Panel
+        from="right"
         role="dialog"
         aria-label={`Study ${doc.title}`}
-        onClick={(e) => e.stopPropagation()}
         className="surface thin-scroll flex h-full w-full max-w-2xl flex-col overflow-y-auto border-l border-neutral-200 shadow-2xl dark:border-[#2e2e33]"
       >
         <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-neutral-200 bg-inherit px-6 py-4 dark:border-[#2e2e33]">
@@ -148,8 +150,15 @@ export function StudyPanel({ doc, onClose }: { doc: DocumentRow; onClose: () => 
             </p>
           )}
 
+          <AnimatePresence mode="wait">
           {output && (
-            <section className="rounded-sm border border-accent-200 p-5 dark:border-accent-500/40">
+            <motion.section
+              key={output.kind + ("title" in output ? output.title : "") + ("question" in output ? output.question : "")}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0, transition: { duration: 0.25 } }}
+              exit={{ opacity: 0, y: -4, transition: { duration: 0.12 } }}
+              className="rounded-sm border border-accent-200 p-5 dark:border-accent-500/40"
+            >
               <div className="mb-3 flex items-center justify-between gap-2">
                 <h3 className="font-bold">
                   {output.kind === "summary" ? `Summary · ${output.title}` : output.kind === "quiz" ? "Quiz created" : "Explanation"}
@@ -192,8 +201,9 @@ export function StudyPanel({ doc, onClose }: { doc: DocumentRow; onClose: () => 
                   <Markdown text={output.content} />
                 </>
               )}
-            </section>
+            </motion.section>
           )}
+          </AnimatePresence>
 
           <section>
             <h3 className="flex items-center gap-2 font-semibold">
@@ -352,7 +362,7 @@ export function StudyPanel({ doc, onClose }: { doc: DocumentRow; onClose: () => 
             )}
           </section>
         </div>
-      </aside>
-    </div>
+      </Panel>
+    </Backdrop>
   );
 }

@@ -12,6 +12,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { PageBody, PageHeader } from "../components/ui";
+import { AnimatePresence } from "motion/react";
+import { Collapse } from "../components/motion";
 import { outputLanguages } from "../data";
 import { displayName, useAuth } from "../lib/auth";
 import { supabase } from "../lib/supabase";
@@ -260,15 +262,19 @@ export function Settings() {
               <div className="rounded-sm bg-neutral-50 p-4 dark:bg-[#232327]">
                 <button onClick={() => setHowOpen((o) => !o)} aria-expanded={howOpen} className="flex w-full items-center justify-between text-sm font-semibold">
                   How does this work?
-                  <ChevronDown className={`size-4 transition-transform ${howOpen ? "rotate-180" : ""}`} />
+                  <ChevronDown className={`size-4 transition-transform duration-300 ${howOpen ? "rotate-180" : ""}`} />
                 </button>
+                <AnimatePresence initial={false}>
                 {howOpen && (
+                  <Collapse>
                   <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm text-neutral-600 dark:text-neutral-400">
                     <li>If you select a language, all AI-generated content will be in that language</li>
                     <li>If you choose "Use PDF language", content will match your document's language</li>
                     <li>This applies to quizzes, summaries, explanations, chapter names, and study cards</li>
                   </ul>
+                  </Collapse>
                 )}
+                </AnimatePresence>
               </div>
             </div>
           </Card>

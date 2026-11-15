@@ -3,6 +3,8 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, BookOpen, CalendarDays, CheckCircle2, Clock, ExternalLink, FastForward, FileText, GraduationCap, Loader2, RotateCcw, Trash2, X } from "lucide-react";
 import { Markdown } from "../Markdown";
+import { AnimatePresence } from "motion/react";
+import { Backdrop, Collapse, Panel } from "../motion";
 import { callFunction } from "../../lib/ai";
 import type { StudySessionRow } from "../../lib/dashboard";
 import { useDocuments, useLibraryMutations } from "../../lib/library";
@@ -83,11 +85,10 @@ export function SessionDialog({ session, onClose }: { session: StudySessionRow; 
   const bigBtn = "flex flex-1 items-center justify-center gap-2 rounded-[2px] py-3 text-[15px] font-semibold disabled:opacity-40";
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={onClose}>
-      <div
+    <Backdrop onClick={onClose} className="z-50 grid place-items-center p-4">
+      <Panel
         role="dialog"
         aria-label={session.title}
-        onClick={(e) => e.stopPropagation()}
         className="surface thin-scroll flex max-h-[92vh] w-full max-w-[640px] flex-col overflow-y-auto rounded-[2px] border border-neutral-200 shadow-2xl dark:border-[#2e2e33]"
       >
         <header className="flex items-start gap-4 px-6 pt-6 pb-4">
@@ -154,11 +155,15 @@ export function SessionDialog({ session, onClose }: { session: StudySessionRow; 
               </ul>
             </section>
           )}
-          {summary && (
-            <section className="rounded-[2px] border border-neutral-200 p-4 dark:border-[#2e2e33]">
-              <Markdown text={summary} />
-            </section>
-          )}
+          <AnimatePresence initial={false}>
+            {summary && (
+              <Collapse>
+                <section className="rounded-[2px] border border-neutral-200 p-4 dark:border-[#2e2e33]">
+                  <Markdown text={summary} />
+                </section>
+              </Collapse>
+            )}
+          </AnimatePresence>
           {error && (
             <p role="alert" className="text-sm text-red-500">
               {error}
@@ -213,7 +218,7 @@ export function SessionDialog({ session, onClose }: { session: StudySessionRow; 
             )}
           </div>
         </footer>
-      </div>
-    </div>
+      </Panel>
+    </Backdrop>
   );
 }

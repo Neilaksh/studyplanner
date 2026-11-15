@@ -1,4 +1,6 @@
 import { Clock } from "lucide-react";
+import { motion } from "motion/react";
+import { EASE_OUT } from "../motion";
 import { localIsoDate } from "../../lib/dashboard";
 import { ACTIVITY, ActivityTile, activityOf, bySchedule, formatTime, parseDate, PriorityPill, statusOf, type PlannerData } from "./shared";
 
@@ -25,7 +27,13 @@ export function PlanTimeline({ sessions, onOpen }: PlannerData) {
 
   return (
     <section className="relative mx-auto max-w-5xl py-4">
-      <span className="absolute top-0 bottom-0 left-6 w-px bg-accent-500/40 md:left-1/2" aria-hidden />
+      <motion.span
+        className="absolute top-0 bottom-0 left-6 w-px origin-top bg-accent-500/40 md:left-1/2"
+        initial={{ scaleY: 0 }}
+        animate={{ scaleY: 1 }}
+        transition={{ duration: 0.8, ease: EASE_OUT }}
+        aria-hidden
+      />
       {days.map((day) => {
         const list = sessions.filter((s) => s.scheduled_for === day).sort(bySchedule);
         const date = parseDate(day);
@@ -52,12 +60,19 @@ export function PlanTimeline({ sessions, onOpen }: PlannerData) {
               const left = side++ % 2 === 0;
               const done = ["completed", "skipped"].includes(statusOf(s));
               return (
-                <div key={s.id} className={`relative mt-5 pl-16 md:w-1/2 md:pl-0 ${left ? "md:pr-12" : "md:ml-auto md:pl-12"}`}>
+                <motion.div
+                  key={s.id}
+                  initial={{ opacity: 0, x: left ? -24 : 24 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true, margin: "-40px" }}
+                  transition={{ duration: 0.4, ease: EASE_OUT }}
+                  className={`relative mt-5 pl-16 md:w-1/2 md:pl-0 ${left ? "md:pr-12" : "md:ml-auto md:pl-12"}`}
+                >
                   <span
                     className={`absolute top-1/2 left-[18px] z-10 size-4 -translate-y-1/2 rounded-full border-2 border-accent-500 bg-white md:left-auto dark:bg-[#1c1c1f] ${left ? "md:-right-2" : "md:-left-2"}`}
                     aria-hidden
                   />
-                  <button onClick={() => onOpen(s)} className={`dot-card block w-full p-5 text-left transition-shadow hover:shadow-md ${done ? "opacity-60" : ""}`}>
+                  <button onClick={() => onOpen(s)} className={`dot-card lift block w-full p-5 text-left ${done ? "opacity-60" : ""}`}>
                     <span className="dots" />
                     <span className="flex items-center gap-3">
                       <ActivityTile s={s} />
@@ -75,7 +90,7 @@ export function PlanTimeline({ sessions, onOpen }: PlannerData) {
                       <Clock className="size-4" /> {s.duration_minutes} min
                     </span>
                   </button>
-                </div>
+                </motion.div>
               );
             })}
           </div>

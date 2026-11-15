@@ -16,6 +16,8 @@ import { useEffect, useRef, useState } from "react";
 import { LogOut, Settings as SettingsIcon } from "lucide-react";
 import { displayName, useAuth } from "../lib/auth";
 import { navigate } from "../router";
+import { AnimatePresence } from "motion/react";
+import { Pop } from "./motion";
 
 function AccountMenu() {
   const { user, profile, signOut } = useAuth();
@@ -48,8 +50,8 @@ function AccountMenu() {
       >
         {name.charAt(0).toUpperCase() || "?"}
       </button>
-      {open && (
-        <div role="menu" className="surface absolute right-0 z-30 mt-2 w-60 rounded-sm border border-neutral-200 py-1 shadow-lg dark:border-[#2e2e33]">
+      <AnimatePresence>{open && (
+        <Pop key="menu" role="menu" className="surface absolute right-0 z-30 mt-2 w-60 rounded-sm border border-neutral-200 py-1 shadow-lg dark:border-[#2e2e33]">
           <div className="border-b border-neutral-200 px-4 py-3 dark:border-[#2e2e33]">
             <p className="truncate font-semibold">{name}</p>
             <p className="truncate text-sm text-neutral-500">{user?.email}</p>
@@ -60,8 +62,8 @@ function AccountMenu() {
           <button role="menuitem" className={`${item} text-red-600`} onClick={() => void signOut()}>
             <LogOut className="size-4" /> Sign out
           </button>
-        </div>
-      )}
+        </Pop>
+      )}</AnimatePresence>
     </div>
   );
 }

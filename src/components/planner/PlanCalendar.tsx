@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { EASE_OUT, SPRING } from "../motion";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { localIsoDate } from "../../lib/dashboard";
 import { bySchedule, PRIORITY, priorityOf, statusOf, type PlannerData } from "./shared";
@@ -27,8 +29,11 @@ export function PlanCalendar({ plans, sessions, onOpen }: PlannerData) {
     for (let i = 0; i < 7; i++) days.push({ iso: localIsoDate(new Date(start.getFullYear(), start.getMonth(), start.getDate() + i)), inMonth: true });
   }
 
-  const shift = (n: number) =>
+  const [slide, setSlide] = useState(1);
+  const shift = (n: number) => {
+    setSlide(n);
     setAnchor(mode === "month" ? new Date(anchor.getFullYear(), anchor.getMonth() + n, 1) : new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + 7 * n));
+  };
   const on = (iso: string) => sessions.filter((s) => s.scheduled_for === iso).sort(bySchedule);
   const exams = (iso: string) => plans.filter((p) => p.exam_date === iso);
 
@@ -73,15 +78,24 @@ export function PlanCalendar({ plans, sessions, onOpen }: PlannerData) {
             <button
               key={m}
               onClick={() => setMode(m)}
-              className={`rounded-[2px] px-4 py-1.5 text-xs font-bold tracking-wider uppercase ${mode === m ? "btn-primary" : "text-neutral-500 hover:text-neutral-900 dark:hover:text-white"}`}
+              className={`relative rounded-[2px] px-4 py-1.5 text-xs font-bold tracking-wider uppercase transition-colors ${mode === m ? "text-white" : "text-neutral-500 hover:text-neutral-900 dark:hover:text-white"}`}
             >
-              {m}
+              {mode === m && <motion.span layoutId="calendar-mode" transition={SPRING} className="absolute inset-0 rounded-[2px] bg-neutral-950 dark:bg-accent-500" aria-hidden />}
+              <span className="relative">{m}</span>
             </button>
           ))}
         </div>
       </header>
 
-      <div className="grid grid-cols-7 gap-2 p-4">
+      <AnimatePresence mode="wait" initial={false} custom={slide}>
+      <motion.div
+        key={mode + days[0]?.iso}
+        custom={slide}
+        initial={{ opacity: 0, x: slide * 24 }}
+        animate={{ opacity: 1, x: 0, transition: { duration: 0.25, ease: EASE_OUT } }}
+        exit={{ opacity: 0, x: slide * -16, transition: { duration: 0.12 } }}
+        className="grid grid-cols-7 gap-2 p-4"
+      >
         {DOW.map((d) => (
           <span key={d} className="pb-1 text-center text-xs font-bold tracking-wider text-neutral-500 uppercase">
             {d}
@@ -125,7 +139,8 @@ export function PlanCalendar({ plans, sessions, onOpen }: PlannerData) {
             </div>
           );
         })}
-      </div>
+      </motion.div>
+      </AnimatePresence>
     </section>
   );
 }

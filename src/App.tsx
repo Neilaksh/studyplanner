@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { AnimatePresence } from "motion/react";
+import { PageTransition } from "./components/motion";
 import { NAV, Sidebar, type NavKey } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
 import { Toast } from "./components/Toast";
@@ -34,7 +36,13 @@ function useTheme() {
     }
   });
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
+    // Fade colours only while switching, so normal hovers and page loads are unaffected.
+    const root = document.documentElement;
+    if (root.classList.contains("dark") !== dark) {
+      root.classList.add("theme-switching");
+      window.setTimeout(() => root.classList.remove("theme-switching"), 320);
+    }
+    root.classList.toggle("dark", dark);
     try {
       localStorage.setItem("theme", dark ? "dark" : "light");
     } catch {
@@ -79,8 +87,16 @@ export default function App() {
     );
   }
 
-  if (isResetPage) return <ResetPassword />;
-  if (!signedIn) return path === "/forgot-password" ? <ForgotPassword /> : <Login />;
+  if (isResetPage || !signedIn) {
+    const page = isResetPage ? <ResetPassword /> : path === "/forgot-password" ? <ForgotPassword /> : <Login />;
+    return (
+      <AnimatePresence mode="wait" initial={false}>
+        <PageTransition key={path} className="h-full">
+          {page}
+        </PageTransition>
+      </AnimatePresence>
+    );
+  }
 
   return <Shell path={path} dark={dark} onToggleTheme={toggleTheme} />;
 }
@@ -101,11 +117,14 @@ function Shell({ path, dark, onToggleTheme }: { path: string; dark: boolean; onT
   return (
     <div className="flex h-full flex-col">
       <Topbar collapsed={collapsed} onToggleSidebar={() => setCollapsed((c) => !c)} dark={dark} onToggleTheme={onToggleTheme} />
-      {toast && <Toast message={toast} onClose={closeToast} />}
+      <AnimatePresence>{toast && <Toast key="toast" message={toast} onClose={closeToast} />}</AnimatePresence>
       <div className="flex min-h-0 flex-1">
         <Sidebar collapsed={collapsed} active={active} onSelect={go} />
         <main id="main-content" className="thin-scroll min-w-0 flex-1 overflow-y-auto bg-[#faf9f8] dark:bg-[#232327]">
-          {quizId ? <QuizPlayer key={quizId} quizId={quizId} /> : <Page onNavigate={go} />}
+          {/* Pages cross-fade: the old one leaves before the new one enters. */}
+          <AnimatePresence mode="wait" initial={false}>
+            <PageTransition key={path}>{quizId ? <QuizPlayer quizId={quizId} /> : <Page onNavigate={go} />}</PageTransition>
+          </AnimatePresence>
         </main>
       </div>
     </div>

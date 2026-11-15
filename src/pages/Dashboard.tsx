@@ -14,6 +14,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { ActivityHeatmap } from "../components/ActivityHeatmap";
+import { AnimatePresence, motion } from "motion/react";
+import { AnimatedNumber, Collapse, EASE_OUT, Stagger, StaggerItem } from "../components/motion";
 import { MiniCalendar } from "../components/MiniCalendar";
 import type { NavKey } from "../components/Sidebar";
 import { displayName, useAuth } from "../lib/auth";
@@ -62,17 +64,29 @@ function StatCard({
   onClick?: () => void;
 }) {
   return (
-    <button onClick={onClick} className="dot-card flex items-center gap-3 px-4 py-3.5 text-left transition-shadow hover:shadow-sm">
+    <StaggerItem>
+    <button onClick={onClick} className="dot-card lift flex h-full w-full items-center gap-3 px-4 py-3.5 text-left">
       <span className="dots" />
       <span className={`grid size-9 shrink-0 place-items-center rounded-sm ${tint}`}>
         <Icon className="size-4" />
       </span>
       <span>
-        <span className="block text-2xl leading-none font-bold">{value}</span>
+        <span className="block text-2xl leading-none font-bold">
+          <StatValue value={value} />
+        </span>
         <span className="mt-1.5 block text-sm text-neutral-500">{label}</span>
       </span>
     </button>
+    </StaggerItem>
   );
+}
+
+/** Whole numbers and percentages count up; anything else ("…", "—", "1h 5m") is shown as is. */
+function StatValue({ value }: { value: string }) {
+  const m = /^(\d+)(%?)$/.exec(value);
+  if (!m) return <>{value}</>;
+  const suffix = m[2];
+  return <AnimatedNumber value={Number(m[1])} format={(n) => `${Math.round(n)}${suffix}`} />;
 }
 
 function SectionHeading({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
@@ -152,7 +166,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (k: NavKey) => void }) {
       </div>
 
       {/* Stats */}
-      <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+      <Stagger className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
         <StatCard icon={FileText} tint="bg-blue-50 text-blue-600 dark:bg-blue-950" value={show(stats?.documents)} label="Documents" onClick={() => onNavigate("pdfs")} />
         <StatCard icon={CheckCircle2} tint="bg-violet-50 text-violet-600 dark:bg-violet-950" value={show(stats?.quizzes)} label="Quizzes" onClick={() => onNavigate("quizzes")} />
         <StatCard icon={HelpCircle} tint="bg-sky-50 text-sky-600 dark:bg-sky-950" value={show(stats?.questions)} label="Questions" onClick={() => onNavigate("quizzes")} />
@@ -164,11 +178,15 @@ export function Dashboard({ onNavigate }: { onNavigate: (k: NavKey) => void }) {
           onClick={() => onNavigate("quizzes")}
         />
         <StatCard icon={Clock} tint="bg-accent-50 text-accent-500 dark:bg-accent-500/15" value={studyTime} label="Study Time" />
-      </div>
+      </Stagger>
       {statsQuery.isError && <LoadError what="your stats" onRetry={() => void statsQuery.refetch()} />}
 
       {/* Two-column body */}
-      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_344px]">
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0, transition: { delay: 0.18, duration: 0.45, ease: EASE_OUT } }}
+        className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_344px]"
+      >
         <div className="min-w-0 space-y-6">
           <ActivityHeatmap activity={activityQuery.data ?? {}} />
           {activityQuery.isError && <LoadError what="your activity" onRetry={() => void activityQuery.refetch()} />}
@@ -185,7 +203,13 @@ export function Dashboard({ onNavigate }: { onNavigate: (k: NavKey) => void }) {
                   GET STARTED
                 </span>
                 <h2 className="mt-1 font-bold">Start Your Learning Journey</h2>
-                {getStartedOpen && <p className="text-sm text-neutral-500">Upload a PDF to get started</p>}
+                <AnimatePresence initial={false}>
+                  {getStartedOpen && (
+                    <Collapse>
+                      <p className="text-sm text-neutral-500">Upload a PDF to get started</p>
+                    </Collapse>
+                  )}
+                </AnimatePresence>
               </div>
               <button onClick={() => onNavigate("pdfs")} aria-label="Go to My PDFs" className="grid size-8 place-items-center rounded hover:bg-neutral-100 dark:hover:bg-neutral-800">
                 <ArrowRight className="size-5 text-accent-500" />
@@ -195,7 +219,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (k: NavKey) => void }) {
                 aria-label={getStartedOpen ? "Collapse card" : "Expand card"}
                 className="grid size-8 place-items-center rounded text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
               >
-                <ChevronUp className={`size-4 transition-transform ${getStartedOpen ? "" : "rotate-180"}`} />
+                <ChevronUp className={`size-4 transition-transform duration-300 ${getStartedOpen ? "" : "rotate-180"}`} />
               </button>
             </div>
           </section>
@@ -306,7 +330,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (k: NavKey) => void }) {
           </section>
           )}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

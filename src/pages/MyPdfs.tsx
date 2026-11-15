@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { PageBody, PageHeader } from "../components/ui";
+import { AnimatePresence, motion } from "motion/react";
 import { StudyPanel } from "../components/StudyPanel";
 import {
   uploadPdf,
@@ -72,7 +73,7 @@ function DocActions({ doc }: { doc: DocumentRow }) {
   const [studying, setStudying] = useState(false);
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {studying && <StudyPanel doc={doc} onClose={() => setStudying(false)} />}
+      <AnimatePresence>{studying && <StudyPanel key="panel" doc={doc} onClose={() => setStudying(false)} />}</AnimatePresence>
       <button
         onClick={() => setStudying(true)}
         className="btn-secondary flex items-center gap-1.5 rounded-[2px] px-3 py-1.5 text-sm font-medium"
@@ -272,7 +273,7 @@ export function MyPdfs() {
           {uploads.length > 0 && (
             <ul className="surface mt-6 divide-y divide-neutral-200 rounded-sm border border-neutral-200 dark:divide-[#2e2e33] dark:border-[#2e2e33]">
               {uploads.map((u) => (
-                <li key={u.key} className="flex items-start gap-3 px-4 py-3 text-sm">
+                <motion.li key={u.key} layout initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex items-start gap-3 px-4 py-3 text-sm">
                   {u.progress.stage === "done" ? (
                     <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-green-600" />
                   ) : u.progress.stage === "failed" ? (
@@ -288,7 +289,7 @@ export function MyPdfs() {
                     {STAGE_LABEL[u.progress.stage]}
                     {u.progress.detail ? ` · ${u.progress.detail}` : ""}
                   </span>
-                </li>
+                </motion.li>
               ))}
               {!busyUploading && (
                 <li className="px-4 py-2 text-right">
@@ -385,9 +386,17 @@ export function MyPdfs() {
               )}
             </div>
           ) : view === "grid" ? (
-            <ul className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {shown.map((d) => (
-                <li key={d.id} className="dot-card flex flex-col p-5">
+            <motion.ul layout className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <AnimatePresence initial={false}>
+              {shown.map((d, i) => (
+                <motion.li
+                  key={d.id}
+                  layout
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0, transition: { duration: 0.3, delay: Math.min(i, 8) * 0.04 } }}
+                  exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.15 } }}
+                  className="dot-card lift flex flex-col p-5"
+                >
                   <span className="dots" />
                   <FileText className="size-8 text-accent-500" />
                   <p className="mt-3 truncate font-semibold" title={d.title}>
@@ -399,13 +408,22 @@ export function MyPdfs() {
                   <div className="mt-4">
                     <DocActions doc={d} />
                   </div>
-                </li>
+                </motion.li>
               ))}
-            </ul>
+              </AnimatePresence>
+            </motion.ul>
           ) : (
             <ul className="surface mt-4 divide-y divide-neutral-200 rounded-sm border border-neutral-200 dark:divide-[#2e2e33] dark:border-[#2e2e33]">
+              <AnimatePresence initial={false}>
               {shown.map((d) => (
-                <li key={d.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <motion.li
+                  key={d.id}
+                  layout
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="flex flex-wrap items-center gap-3 px-4 py-3"
+                >
                   <FileText className="size-5 text-accent-500" />
                   <span className="min-w-0 flex-1 truncate font-medium" title={d.title}>
                     {d.title}
@@ -414,8 +432,9 @@ export function MyPdfs() {
                     {d.page_count ?? "?"} pages · {formatSize(d.size_bytes)}
                   </span>
                   <DocActions doc={d} />
-                </li>
+                </motion.li>
               ))}
+              </AnimatePresence>
             </ul>
           )}
         </section>

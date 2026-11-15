@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, RotateCcw, Trophy, XCircle } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { Markdown } from "../components/Markdown";
+import { AnimatedNumber, Collapse, EASE_OUT, ProgressBar, SPRING, Stagger, StaggerItem } from "../components/motion";
 import { PageBody } from "../components/ui";
 import { useQuiz, useSaveAttempt } from "../lib/quizzes";
 import { navigate } from "../router";
@@ -11,6 +13,11 @@ export function QuizPlayer({ quizId }: { quizId: string }) {
   const quiz = useQuiz(quizId);
   const save = useSaveAttempt();
   const [index, setIndex] = useState(0);
+  const [dir, setDir] = useState(1); // slide direction for the question card
+  const goTo = (n: number) => {
+    setDir(n > index ? 1 : -1);
+    setIndex(n);
+  };
   const [answers, setAnswers] = useState<(number | null)[]>([]);
   const [finished, setFinished] = useState(false);
   const startedAt = useRef(new Date());
@@ -35,6 +42,7 @@ export function QuizPlayer({ quizId }: { quizId: string }) {
 
   function restart() {
     setAnswers(Array(questions.length).fill(null));
+    setDir(-1);
     setIndex(0);
     setFinished(false);
     save.reset();
@@ -73,11 +81,13 @@ export function QuizPlayer({ quizId }: { quizId: string }) {
     return (
       <PageBody>
         {back}
-        <section className="dot-card mx-auto max-w-3xl p-8 text-center">
+        <motion.section initial={{ opacity: 0, scale: 0.96, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={SPRING} className="dot-card mx-auto max-w-3xl p-8 text-center">
           <span className="dots" />
-          <Trophy className={`mx-auto size-10 ${score >= 70 ? "text-amber-500" : "text-neutral-400"}`} />
+          <motion.span className="inline-block" initial={{ scale: 0, rotate: -20 }} animate={{ scale: 1, rotate: 0 }} transition={{ ...SPRING, delay: 0.15 }}>
+            <Trophy className={`mx-auto size-10 ${score >= 70 ? "text-amber-500" : "text-neutral-400"}`} />
+          </motion.span>
           <h1 className="mt-4 text-2xl font-bold">{quiz.data.title}</h1>
-          <p className={`mt-3 text-5xl font-bold ${score >= 70 ? "text-green-600" : score >= 50 ? "text-amber-500" : "text-red-500"}`}>{score}%</p>
+          <p className={`mt-3 text-5xl font-bold ${score >= 70 ? "text-green-600" : score >= 50 ? "text-amber-500" : "text-red-500"}`}><AnimatedNumber value={score} format={(n) => `${Math.round(n)}%`} /></p>
           <p className="mt-2 text-neutral-500">
             {correctCount} of {questions.length} correct
           </p>
@@ -92,14 +102,14 @@ export function QuizPlayer({ quizId }: { quizId: string }) {
               Done
             </button>
           </div>
-        </section>
+        </motion.section>
 
         <h2 className="mx-auto mt-8 max-w-3xl text-lg font-bold">Review</h2>
-        <ol className="mx-auto mt-3 max-w-3xl space-y-3">
+        <Stagger as="ul" className="mx-auto mt-3 max-w-3xl space-y-3">
           {questions.map((qq, i) => {
             const right = answers[i] === qq.correct_index;
             return (
-              <li key={qq.id} className="dot-card p-5">
+              <StaggerItem as="li" key={qq.id} className="dot-card p-5">
                 <span className="dots" />
                 <p className="flex gap-2 font-medium">
                   {right ? <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-green-600" /> : <XCircle className="mt-0.5 size-5 shrink-0 text-red-500" />}
@@ -114,10 +124,10 @@ export function QuizPlayer({ quizId }: { quizId: string }) {
                     <Markdown text={qq.explanation} />
                   </div>
                 )}
-              </li>
+              </StaggerItem>
             );
           })}
-        </ol>
+        </Stagger>
       </PageBody>
     );
   }
@@ -137,12 +147,20 @@ export function QuizPlayer({ quizId }: { quizId: string }) {
           <span>
             Question {index + 1} of {questions.length}
           </span>
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-200 dark:bg-[#2e2e33]" aria-hidden>
-            <div className="h-full bg-accent-500 transition-[width]" style={{ width: `${((index + (revealed ? 1 : 0)) / questions.length) * 100}%` }} />
-          </div>
+          <span className="flex-1" aria-hidden>
+            <ProgressBar value={((index + (revealed ? 1 : 0)) / questions.length) * 100} />
+          </span>
         </div>
 
-        <section className="dot-card mt-4 p-6">
+        <AnimatePresence mode="wait" custom={dir} initial={false}>
+        <motion.section
+          key={index}
+          custom={dir}
+          initial={{ opacity: 0, x: dir * 40 }}
+          animate={{ opacity: 1, x: 0, transition: { duration: 0.3, ease: EASE_OUT } }}
+          exit={{ opacity: 0, x: dir * -30, transition: { duration: 0.15 } }}
+          className="dot-card mt-4 p-6"
+        >
           <span className="dots" />
           <h2 className="text-lg font-semibold">{q.prompt}</h2>
           <ul className="mt-5 space-y-2" role="radiogroup" aria-label="Answers">
@@ -157,50 +175,74 @@ export function QuizPlayer({ quizId }: { quizId: string }) {
                     ? "border-red-500 bg-red-50 dark:bg-red-950/30"
                     : "border-neutral-200 opacity-60 dark:border-[#2e2e33]";
               return (
-                <li key={i}>
-                  <button
+                <motion.li
+                  key={i}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0, transition: { delay: 0.05 + i * 0.04, duration: 0.25 } }}
+                >
+                  <motion.button
                     role="radio"
                     aria-checked={isChosen}
                     disabled={revealed}
                     onClick={() => setAnswers((a) => a.map((v, j) => (j === index ? i : v)))}
-                    className={`flex w-full items-start gap-3 rounded-[2px] border px-4 py-3 text-left transition-colors ${state}`}
+                    // Wrong pick shakes; the right answer gives a small pop.
+                    animate={
+                      revealed && isChosen && !isCorrect
+                        ? { x: [0, -6, 6, -4, 4, 0], transition: { duration: 0.4 } }
+                        : revealed && isCorrect
+                          ? { scale: [1, 1.02, 1], transition: { duration: 0.3 } }
+                          : { x: 0, scale: 1 }
+                    }
+                    whileHover={revealed ? undefined : { x: 3 }}
+                    whileTap={revealed ? undefined : { scale: 0.98 }}
+                    className={`flex w-full items-start gap-3 rounded-[2px] border px-4 py-3 text-left transition-colors duration-200 ${state}`}
                   >
                     <span className="grid size-6 shrink-0 place-items-center rounded-full border border-current text-xs font-semibold">{LETTERS[i]}</span>
                     <span className="flex-1">{choice}</span>
-                    {revealed && isCorrect && <CheckCircle2 className="size-5 shrink-0 text-green-600" />}
-                    {revealed && isChosen && !isCorrect && <XCircle className="size-5 shrink-0 text-red-500" />}
-                  </button>
-                </li>
+                    <AnimatePresence>
+                      {revealed && (isCorrect || isChosen) && (
+                        <motion.span key="mark" initial={{ scale: 0, rotate: -30 }} animate={{ scale: 1, rotate: 0 }} transition={SPRING}>
+                          {isCorrect ? <CheckCircle2 className="size-5 shrink-0 text-green-600" /> : <XCircle className="size-5 shrink-0 text-red-500" />}
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </motion.button>
+                </motion.li>
               );
             })}
           </ul>
 
-          {revealed && (
-            <div className="mt-5 rounded-[2px] bg-neutral-50 p-4 text-sm dark:bg-[#26262a]">
-              <p className={`font-semibold ${chosen === q.correct_index ? "text-green-600" : "text-red-500"}`}>
-                {chosen === q.correct_index ? "Correct!" : "Not quite."}
-              </p>
-              {q.explanation && <Markdown text={q.explanation} />}
-            </div>
-          )}
+          <AnimatePresence initial={false}>
+            {revealed && (
+              <Collapse>
+                <div className="mt-5 rounded-[2px] bg-neutral-50 p-4 text-sm dark:bg-[#26262a]">
+                  <p className={`font-semibold ${chosen === q.correct_index ? "text-green-600" : "text-red-500"}`}>
+                    {chosen === q.correct_index ? "Correct!" : "Not quite."}
+                  </p>
+                  {q.explanation && <Markdown text={q.explanation} />}
+                </div>
+              </Collapse>
+            )}
+          </AnimatePresence>
 
           <div className="mt-6 flex justify-between">
             <button
               disabled={index === 0}
-              onClick={() => setIndex((i) => i - 1)}
+              onClick={() => goTo(index - 1)}
               className="btn-secondary flex items-center gap-1.5 rounded-[2px] px-4 py-2 text-sm font-medium disabled:opacity-40"
             >
               <ArrowLeft className="size-4" /> Previous
             </button>
             <button
               disabled={!revealed}
-              onClick={() => (isLast ? finish() : setIndex((i) => i + 1))}
+              onClick={() => (isLast ? finish() : goTo(index + 1))}
               className="btn-primary flex items-center gap-1.5 rounded-[2px] px-4 py-2 text-sm font-medium disabled:opacity-40"
             >
               {isLast ? "See results" : "Next"} <ArrowRight className="size-4" />
             </button>
           </div>
-        </section>
+        </motion.section>
+        </AnimatePresence>
       </div>
     </PageBody>
   );

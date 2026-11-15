@@ -1,5 +1,7 @@
 // Five-step plan builder: name → PDFs → chapters → exam date → study habits → review.
 import { useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { Backdrop, Collapse, EASE_OUT, Panel, SPRING } from "./motion";
 import {
   ArrowLeft,
   ArrowRight,
@@ -25,6 +27,13 @@ import { previewSchedule, usePlannerMutations, type CreateProgress } from "../li
 import { daysBetween, TIME_SLOTS, type TimeSlot } from "../lib/schedule";
 
 const STEPS = ["PDFs", "Chapters", "Date", "Habits", "Ready"] as const;
+
+/** Steps slide forward/back with the direction of travel. */
+const STEP_SLIDE = {
+  enter: (d: number) => ({ opacity: 0, x: d * 40 }),
+  center: { opacity: 1, x: 0, transition: { duration: 0.3, ease: EASE_OUT } },
+  exit: (d: number) => ({ opacity: 0, x: d * -30, transition: { duration: 0.15 } }),
+};
 
 export const SLOT_INFO: Record<TimeSlot, { emoji: string; label: string; hours: string }> = {
   morning: { emoji: "🌅", label: "Morning", hours: "6AM - 12PM" },
@@ -125,7 +134,9 @@ function ChapterGroup({ doc, chapters, picked, toggle }: { doc: DocumentRow; cha
         </span>
         <ChevronDown className={`size-4 text-neutral-500 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
+      <AnimatePresence initial={false}>
       {open && (
+        <Collapse>
         <div className="p-3">
           {chapters.length === 0 ? (
             <div className="flex flex-wrap items-center gap-3 p-2 text-sm">
@@ -170,7 +181,9 @@ function ChapterGroup({ doc, chapters, picked, toggle }: { doc: DocumentRow; cha
             </ul>
           )}
         </div>
+        </Collapse>
       )}
+      </AnimatePresence>
     </section>
   );
 }
@@ -356,11 +369,20 @@ function GeneratingScreen({ phase, chapters }: { phase: CreateProgress; chapters
           <div className="h-full bg-accent-500 transition-[width] duration-300" style={{ width: `${pct}%` }} />
         </div>
         <div className="px-6 py-12 text-center">
-          <span className="mx-auto grid size-24 place-items-center rounded-[2px] border border-accent-500/30 bg-accent-50 text-5xl dark:bg-accent-500/10" aria-hidden>
-            {p.emoji}
-          </span>
-          <h3 className="mt-6 text-3xl font-bold text-accent-500">{p.title}</h3>
-          <p className="mt-2 text-lg text-neutral-500">{p.subtitle}</p>
+          <AnimatePresence mode="wait">
+            <motion.div key={phase} initial={{ opacity: 0, y: 10, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.25 }}>
+              <motion.span
+                className="mx-auto grid size-24 place-items-center rounded-[2px] border border-accent-500/30 bg-accent-50 text-5xl dark:bg-accent-500/10"
+                animate={{ y: [0, -6, 0] }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+                aria-hidden
+              >
+                {p.emoji}
+              </motion.span>
+              <h3 className="mt-6 text-3xl font-bold text-accent-500">{p.title}</h3>
+              <p className="mt-2 text-lg text-neutral-500">{p.subtitle}</p>
+            </motion.div>
+          </AnimatePresence>
           <div className="mx-auto mt-8 max-w-md">
             <div className="flex items-end justify-between">
               <span className="text-xs font-bold tracking-wide text-neutral-500 uppercase">Plan initializing</span>
@@ -373,7 +395,12 @@ function GeneratingScreen({ phase, chapters }: { phase: CreateProgress; chapters
         </div>
       </div>
       <p className="mt-4 flex items-center gap-3 rounded-[2px] border border-accent-500/20 bg-accent-50/60 px-5 py-4 italic dark:bg-accent-500/10">
-        <span aria-hidden>💡</span> {tip}
+        <span aria-hidden>💡</span>
+        <AnimatePresence mode="wait">
+          <motion.span key={tip} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2 }}>
+            {tip}
+          </motion.span>
+        </AnimatePresence>
       </p>
     </div>
   );
@@ -384,7 +411,12 @@ export function PlanWizard({ onClose, planNumber }: { onClose: () => void; planN
   const { createPlan } = usePlannerMutations();
   const today = localIsoDate(new Date());
 
-  const [step, setStep] = useState(0); // 0 = intro, 1..5 = steps
+  const [step, setStepRaw] = useState(0); // 0 = intro, 1..5 = steps
+  const [dir, setDir] = useState(1);
+  const setStep = (n: number) => {
+    setDir(n > step ? 1 : -1);
+    setStepRaw(n);
+  };
   const [title, setTitle] = useState("");
   const [docIds, setDocIds] = useState<string[]>([]);
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -447,8 +479,8 @@ export function PlanWizard({ onClose, planNumber }: { onClose: () => void; planN
 
   if (phase) {
     return (
-      <div className="fixed inset-0 z-40 grid place-items-center bg-black/50 p-4">
-        <div role="dialog" aria-label="Creating your plan" className="surface w-full max-w-[900px] rounded-[2px] border border-neutral-200 shadow-2xl dark:border-[#2e2e33]">
+      <Backdrop className="grid place-items-center p-4">
+        <Panel role="dialog" aria-label="Creating your plan" className="surface w-full max-w-[900px] rounded-[2px] border border-neutral-200 shadow-2xl dark:border-[#2e2e33]">
           <header className="flex items-center gap-4 border-b border-neutral-200 px-7 py-5 dark:border-[#2e2e33]">
             <Sparkles className="size-5 text-accent-500" />
             <h2 className={`text-lg ${caps}`}>Plan Architect</h2>
@@ -456,17 +488,16 @@ export function PlanWizard({ onClose, planNumber }: { onClose: () => void; planN
           <div className="p-7">
             <GeneratingScreen phase={phase} chapters={chosen.length} />
           </div>
-        </div>
-      </div>
+        </Panel>
+      </Backdrop>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-40 grid place-items-center bg-black/50 p-4" onClick={onClose}>
-      <div
+    <Backdrop onClick={onClose} className="grid place-items-center p-4">
+      <Panel
         role="dialog"
         aria-label="Plan builder"
-        onClick={(e) => e.stopPropagation()}
         className="surface flex max-h-[92vh] w-full max-w-[900px] flex-col rounded-[2px] border border-neutral-200 shadow-2xl dark:border-[#2e2e33]"
       >
         <header className="flex items-center gap-4 border-b border-neutral-200 px-7 py-5 dark:border-[#2e2e33]">
@@ -483,16 +514,31 @@ export function PlanWizard({ onClose, planNumber }: { onClose: () => void; planN
             {STEPS.map((label, i) => {
               const n = i + 1;
               return (
-                <div key={label} className={`flex items-center gap-3 ${n === step ? "flex-[1.4]" : "flex-1"}`}>
-                  <span className={`h-1.5 flex-1 rounded-full ${n <= step ? "bg-accent-500" : "bg-neutral-200 dark:bg-[#2e2e33]"}`} />
-                  {n === step && <span className="text-xs font-bold text-accent-500 uppercase italic">{label}</span>}
-                </div>
+                <motion.div key={label} layout transition={SPRING} className={`flex items-center gap-3 ${n === step ? "flex-[1.4]" : "flex-1"}`}>
+                  <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-200 dark:bg-[#2e2e33]">
+                    <motion.span
+                      className="block h-full rounded-full bg-accent-500"
+                      initial={false}
+                      animate={{ width: n <= step ? "100%" : "0%" }}
+                      transition={{ duration: 0.45, ease: EASE_OUT }}
+                    />
+                  </span>
+                  <AnimatePresence initial={false}>
+                    {n === step && (
+                      <motion.span key="label" initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="text-xs font-bold text-accent-500 uppercase italic">
+                        {label}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
               );
             })}
           </div>
         )}
 
-        <div className="thin-scroll min-h-0 flex-1 overflow-y-auto px-7 py-7">
+        <div className="thin-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-7 py-7">
+          <AnimatePresence mode="wait" custom={dir} initial={false}>
+          <motion.div key={step} custom={dir} variants={STEP_SLIDE} initial="enter" animate="center" exit="exit">
           {step === 0 && (
             <div className="py-6 text-center">
               <span className="mx-auto grid size-24 place-items-center rounded-[2px] bg-accent-500 text-white shadow-lg shadow-accent-500/20">
@@ -614,6 +660,8 @@ export function PlanWizard({ onClose, planNumber }: { onClose: () => void; planN
               )}
             </>
           )}
+          </motion.div>
+          </AnimatePresence>
         </div>
 
         <footer className="flex items-center justify-between border-t border-neutral-200 px-7 py-5 dark:border-[#2e2e33]">
@@ -632,7 +680,7 @@ export function PlanWizard({ onClose, planNumber }: { onClose: () => void; planN
             {step === 5 ? "Create Plan" : "Next Step"} <ArrowRight className="size-4" />
           </button>
         </footer>
-      </div>
-    </div>
+      </Panel>
+    </Backdrop>
   );
 }

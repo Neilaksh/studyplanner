@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CalendarCheck, CalendarDays, CheckCircle2, Clock, List, Loader2, MoreVertical, Pause, Play, Plus, Trash2 } from "lucide-react";
 import { IconTile, PageBody, PageHeader } from "../components/ui";
+import { AnimatePresence, motion } from "motion/react";
+import { Pop, ProgressBar, SPRING, Stagger, StaggerItem } from "../components/motion";
 import { PlanWizard } from "../components/PlanWizard";
 import { PlanBoard } from "../components/planner/PlanBoard";
 import { PlanCalendar } from "../components/planner/PlanCalendar";
@@ -19,7 +21,7 @@ const VIEWS: { key: View; label: string; icon: typeof CalendarDays }[] = [
 
 function Stat({ icon: Icon, tint, value, label, bar, danger }: { icon: typeof Clock; tint: string; value: string; label: string; bar?: number; danger?: boolean }) {
   return (
-    <div className="dot-card flex flex-col justify-center px-5 py-4">
+    <StaggerItem className="dot-card lift flex flex-col justify-center px-5 py-4">
       <span className="dots" />
       <div className="flex items-center gap-4">
         <span className={`grid size-11 shrink-0 place-items-center rounded-sm ${tint}`}>
@@ -31,11 +33,9 @@ function Stat({ icon: Icon, tint, value, label, bar, danger }: { icon: typeof Cl
         </span>
       </div>
       {bar !== undefined && (
-        <div className="mt-3 h-1 overflow-hidden rounded-full bg-neutral-200 dark:bg-[#2e2e33]">
-          <div className="h-full bg-accent-500" style={{ width: `${bar}%` }} />
-        </div>
+        <ProgressBar value={bar} className="mt-3 h-1" />
       )}
-    </div>
+    </StaggerItem>
   );
 }
 
@@ -62,7 +62,7 @@ function PlanCard({ plan, sessions, selected, onSelect }: { plan: StudyPlanRow; 
       onClick={onSelect}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelect()}
       aria-pressed={selected}
-      className={`dot-card relative w-full cursor-pointer p-6 text-left sm:w-80 ${selected ? "ring-2 ring-accent-500" : ""} ${paused ? "opacity-70" : ""}`}
+      className={`dot-card lift relative w-full cursor-pointer p-6 text-left transition-shadow sm:w-80 ${selected ? "ring-2 ring-accent-500" : ""} ${paused ? "opacity-70" : ""}`}
     >
       <span className="dots" />
       <div className="flex items-start gap-2">
@@ -94,12 +94,11 @@ function PlanCard({ plan, sessions, selected, onSelect }: { plan: StudyPlanRow; 
         </span>
         <span>{pct}%</span>
       </div>
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-neutral-200 dark:bg-[#2e2e33]">
-        <div className="h-full bg-accent-500" style={{ width: `${pct}%` }} />
-      </div>
+      <ProgressBar value={pct} className="mt-2 h-1.5" />
 
+      <AnimatePresence>
       {menu && (
-        <div role="menu" onClick={(e) => e.stopPropagation()} className="surface absolute top-12 right-4 z-20 w-44 rounded-[2px] border border-neutral-200 py-1 shadow-lg dark:border-[#2e2e33]">
+        <Pop key="menu" role="menu" onClick={(e) => e.stopPropagation()} className="surface absolute top-12 right-4 z-20 w-44 rounded-[2px] border border-neutral-200 py-1 shadow-lg dark:border-[#2e2e33]">
           <button
             role="menuitem"
             onClick={() => {
@@ -120,8 +119,9 @@ function PlanCard({ plan, sessions, selected, onSelect }: { plan: StudyPlanRow; 
           >
             <Trash2 className="size-4" /> Delete plan
           </button>
-        </div>
+        </Pop>
       )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -185,21 +185,22 @@ export function StudyPlanner() {
         </div>
       ) : (
         <>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Stagger className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Stat icon={CalendarCheck} tint="bg-accent-50 text-accent-500 dark:bg-accent-500/15" value={`${active} / ${list.length}`} label="Active Plans" />
             <Stat icon={CheckCircle2} tint="bg-green-50 text-green-600 dark:bg-green-500/15" value={`${completed} / ${allSessions.length}`} label="Completed Sessions" />
             <Stat icon={Clock} tint="bg-sky-50 text-sky-600 dark:bg-sky-500/15" value={`${progress}%`} label="Overall Progress" bar={progress} />
             <Stat icon={AlertTriangle} tint="bg-red-50 text-red-500 dark:bg-red-500/15" value={String(overdue)} label="Overdue Sessions" danger={overdue > 0} />
-          </div>
+          </Stagger>
 
           <div className="mt-8 flex w-fit rounded-[2px] border border-neutral-200 p-1 dark:border-[#2e2e33]">
             {VIEWS.map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
                 onClick={() => setView(key)}
-                className={`flex items-center gap-2 rounded-[2px] px-5 py-2 text-sm font-bold tracking-wider uppercase ${view === key ? "btn-primary" : "text-neutral-500 hover:text-neutral-900 dark:hover:text-white"}`}
+                className={`relative flex items-center gap-2 rounded-[2px] px-5 py-2 text-sm font-bold tracking-wider uppercase transition-colors ${view === key ? "text-white" : "text-neutral-500 hover:text-neutral-900 dark:hover:text-white"}`}
               >
-                <Icon className="size-4" /> {label}
+                {view === key && <motion.span layoutId="planner-view" transition={SPRING} className="absolute inset-0 rounded-[2px] bg-neutral-950 dark:bg-accent-500" aria-hidden />}
+                <Icon className="relative size-4" /> <span className="relative">{label}</span>
               </button>
             ))}
           </div>
@@ -224,13 +225,15 @@ export function StudyPlanner() {
             </div>
           </div>
 
-          <div className="mt-8">
+          <AnimatePresence mode="wait" initial={false}>
+          <motion.div key={view} className="mt-8" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0, transition: { duration: 0.25 } }} exit={{ opacity: 0, y: -6, transition: { duration: 0.12 } }}>
             {view === "calendar" && <PlanCalendar {...data} />}
             {view === "board" && (
               <PlanBoard {...data} onMove={(s, status) => setStatus.mutate({ session: s, status, documentId: planDoc(s.plan_id) })} />
             )}
             {view === "timeline" && <PlanTimeline {...data} />}
-          </div>
+          </motion.div>
+          </AnimatePresence>
           {setStatus.isError && (
             <p role="alert" className="mt-3 text-sm text-red-500">
               {setStatus.error.message}
@@ -239,8 +242,8 @@ export function StudyPlanner() {
         </>
       )}
 
-      {creating && <PlanWizard planNumber={list.length + 1} onClose={() => setCreating(false)} />}
-      {openSession && <SessionDialog session={openSession} onClose={() => setOpenId(null)} />}
+      <AnimatePresence>{creating && <PlanWizard key="wizard" planNumber={list.length + 1} onClose={() => setCreating(false)} />}</AnimatePresence>
+      <AnimatePresence>{openSession && <SessionDialog key="session" session={openSession} onClose={() => setOpenId(null)} />}</AnimatePresence>
     </PageBody>
   );
 }
