@@ -9,6 +9,7 @@ import { useAuth } from "./lib/auth";
 import { navigate, usePath } from "./router";
 import { MobileNav } from "./components/MobileNav";
 import { Login } from "./pages/auth/Login";
+import { Register } from "./pages/auth/Register";
 import { ForgotPassword, ResetPassword } from "./pages/auth/PasswordReset";
 
 // Each page is its own chunk, downloaded the first time it is opened.
@@ -34,7 +35,7 @@ const pageFallback = (
   </div>
 );
 
-const SIGNED_OUT_ONLY = ["/login", "/forgot-password"];
+const SIGNED_OUT_ONLY = ["/login", "/register", "/forgot-password"];
 const go = (k: NavKey) => navigate(NAV.find((n) => n.key === k)!.path);
 
 function useTheme() {
@@ -98,7 +99,7 @@ export default function App() {
   }
 
   if (isResetPage || !signedIn) {
-    const page = isResetPage ? <ResetPassword /> : path === "/forgot-password" ? <ForgotPassword /> : <Login />;
+    const page = isResetPage ? <ResetPassword /> : path === "/forgot-password" ? <ForgotPassword /> : path === "/register" ? <Register /> : <Login />;
     return (
       <AnimatePresence mode="wait" initial={false}>
         <PageTransition key={path} className="h-full">
